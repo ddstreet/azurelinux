@@ -41,6 +41,10 @@ Source3:        sha512hmac-openssl.sh
 Source4:        azurelinux-ca-20230216.pem
 Source5:        cpupower
 Source6:        cpupower.service
+
+Source999:      kernel-lvbs.patches
+%include %{SOURCE999}
+
 BuildRequires:  audit-devel
 BuildRequires:  bash
 BuildRequires:  bc
@@ -170,7 +174,7 @@ This package contains the bpftool, which allows inspection and simple
 manipulation of eBPF programs and maps.
 
 %prep
-%setup -q -n CBL-Mariner-Linux-Kernel-rolling-lts-mariner-%{mariner_version}-%{version}
+%autosetup -p1 -n CBL-Mariner-Linux-Kernel-rolling-lts-mariner-%{mariner_version}-%{version}
 make mrproper
 
 cp %{SOURCE1} .config
