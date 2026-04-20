@@ -129,6 +129,7 @@
         <package name="iproute" />
         <package name="iputils" />
         <package name="irqbalance" />
+        <package name="kdump-utils" />
         <package name="kernel" />
         <package name="lvm2" />
         <package name="lz4" />
