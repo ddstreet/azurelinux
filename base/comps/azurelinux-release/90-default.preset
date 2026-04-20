@@ -190,6 +190,7 @@ enable abrt-xorg.service
 enable abrt-vmcore.service
 
 # Locally-running services
+enable kdump.service
 enable ksm.service
 enable ksmtuned.service
 enable rootfs-resize.service

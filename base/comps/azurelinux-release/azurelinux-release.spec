@@ -36,7 +36,7 @@ Summary:        Azure Linux release files
 Name:           azurelinux-release
 Version:        4.0
 # TODO(azl): Review whether we can move back to autorelease (with conditional -p)
-Release:        17%{?dist}
+Release:        18%{?dist}
 License:        MIT
 URL:            https://aka.ms/azurelinux
 
@@ -476,6 +476,9 @@ install -Dm0644 %{SOURCE22} -t %{buildroot}%{_sysctldir}/
 
 
 %changelog
+* Mon Jun 01 2026 Dan Streetman <ddstreet@ieee.org> - 4.0-18
+- Add kdump.service to 90-default.preset
+
 * Thu May 14 2026 Reuben Olinsky <reubeno@microsoft.com> - 4.0-17
 - Redefine azurelinux macro as major version.
 
