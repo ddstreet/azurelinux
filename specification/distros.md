@@ -5,14 +5,6 @@
 
 The distros object provides configuration for one or more distributions. It contains any number object fields, with free-format keys corresponding to the name of each distribution, and fields as described below.
 
-## description
-
-This optional string field contains a free-format description of the distrubution.
-
-## default_version
-
-This required string field contains a free-format version number to use by default, which must have a matching version in the 'versions' field.
-
 ## dist_git_base_uri
 
 This required string field contains a URI-format base template for the distribution's dist-git repositories.

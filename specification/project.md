@@ -5,10 +5,6 @@
 
 The project object provides general project-wide configuration, and contains the following fields.
 
-## description
-
-This optional string field is the description of the project.
-
 ## default_distro
 
 This optional object field contains these fields:
