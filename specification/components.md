@@ -28,7 +28,7 @@ Spec objects with type 'upstream' have the following fields:
     This required string field provides the name of the distribution dist-git to use.
 
   - version
-    This optional string field provides the version of the distribution dist-git to use.
+    This required string field provides the version of the distribution dist-git to use.
 
   - snapshot
     This optional string field provides RFC-3339 formatted date/time of the distribution dist-git to use.
