@@ -17,7 +17,7 @@ This optional object field contains these fields:
   This required string field contains the name of the default distro, which must match a distro defined in the top-level 'distros' object.
 
 - version
-  This optional string field contains the version of the default distro, which must match a distro version defined in the distro object named above.
+  This required string field contains the version of the default distro, which must match a distro version defined in the distro object named above.
 
 ## rendered_specs_dir
 
