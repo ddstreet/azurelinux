@@ -13,12 +13,12 @@ set -euo pipefail
 # --- Constants --------------------------------------------------------------
 
 readonly COMPONENT="exfatprogs"
-readonly UPSTREAM_VERSION="1.3.1"
+readonly UPSTREAM_VERSION="1.4.3"
 readonly UPSTREAM_FILENAME="exfatprogs-${UPSTREAM_VERSION}.tar.xz"
 readonly UPSTREAM_TOPDIR="exfatprogs-${UPSTREAM_VERSION}"
 readonly UPSTREAM_URL="https://github.com/${COMPONENT}/${COMPONENT}/releases/download/${UPSTREAM_VERSION}/${UPSTREAM_FILENAME}"
 
-readonly UPSTREAM_SHA512="28afefa6a4460a52d8078c47bcb63fdde42778a44e428481beff401f5f2ea305409ba42ae4357e03d7f3c9169e874c99c8caf00aca4d6223561cde11ac886cad"
+readonly UPSTREAM_SHA512="8452801873088029319abe477135a970ed6cdaccc087e620694714f1f6653e7a1875572720c9cf2af0b1c116f4bc6a71a1b0e4a903b75affff9d19b78d451d8d"
 
 # Deterministic-repack mtime: 2020-01-01T00:00:00Z (1577836800).
 # Any fixed epoch works; do not change without also bumping the

@@ -64,11 +64,11 @@
 
 set -euo pipefail
 
-UPSTREAM_URL="https://github.com/VirusTotal/yara/archive/v4.5.4.tar.gz"
-ORIGINAL_NAME="yara-4.5.4.tar.gz"
-ORIGINAL_SHA512="b1da40636f9e55bb07cc911479e6dfa8dc7a4fa3f6b9f10b9f669d741d7af51a1d31e044f9842ec3ab9c6ac9788fbdb89a1686c9e3f22f68d1f9e5fb3db22167"
-MODIFIED_NAME="yara-4.5.4-azl-stripped.tar.gz"
-EXTRACTED_DIRNAME="yara-4.5.4"
+UPSTREAM_URL="https://github.com/VirusTotal/yara/archive/v4.5.7.tar.gz"
+ORIGINAL_NAME="yara-4.5.7.tar.gz"
+ORIGINAL_SHA512="ff53b0606fa947a9ab882c1e4c610586c28b8383873c4ee589e380e7478229e5ef11572650884dbcd8e487061f744e2e0ce70807bc9d8685e2cb4f781301a05b"
+MODIFIED_NAME="yara-4.5.7-azl-stripped.tar.gz"
+EXTRACTED_DIRNAME="yara-4.5.7"
 
 # Files to remove from the upstream tarball.
 #

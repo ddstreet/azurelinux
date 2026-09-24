@@ -41,7 +41,7 @@ set -euo pipefail
 
 # Pinned package version. To bump, also update UPSTREAM_SHA512 below and
 # the `hash` field in firefox.comp.toml.
-VERSION="148.0"
+VERSION="155.0"
 KEEP=0
 # Default workdir lives under the project work dir to comply with AGENTS.md.
 # Convention from Task 19805: base/build/work/scratch/<component>/.
@@ -72,7 +72,7 @@ REMOVE_PATHS=(
 )
 
 # Known upstream SHA-512 (from specs/f/firefox/sources). Bump when version changes.
-UPSTREAM_SHA512="b0e862091f3a07a02890f6414e77b433893364a8beaf522d440e97ed0060c9b14bdb2fffdecdf12dca849efce8c57d95a534b23e04259d83a96ee8f29e078349"
+UPSTREAM_SHA512="24292681924edb9f0494eb77a7b19994039abbc3a8c0ba304f0e472b49a943838565723de983bc8ef08e019971e02a3014c8d241bb88c645a06a625c8ace0d6a"
 
 # Fixed mtime for every entry in the repacked tarball:
 # 2020-01-01T00:00:00Z (1577836800). Any fixed epoch works; do not change

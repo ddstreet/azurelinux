@@ -12,5 +12,5 @@ upstream-status = "inapplicable"
 [[overlays]]
 description = "Remove the prebuilt Win32 demo executable from the oversampling test directory"
 type = "file-remove"
-archive = "stb-f1c79c02822848a9bed4315b12c8c8f3761e1296.tar.gz"
+archive = "stb-904aa67e1e2d1dec92959df63e700b166d5c1022.tar.gz"
 file = "tests/oversample/oversample.exe"

@@ -25,12 +25,12 @@ umask 022
 # --- Constants --------------------------------------------------------------
 
 readonly COMPONENT="libabigail"
-readonly UPSTREAM_VERSION="2.9"
+readonly UPSTREAM_VERSION="2.10"
 readonly UPSTREAM_FILENAME="${COMPONENT}-${UPSTREAM_VERSION}.tar.xz"
 readonly UPSTREAM_TOPDIR="${COMPONENT}-${UPSTREAM_VERSION}"
 readonly UPSTREAM_URL="https://mirrors.kernel.org/sourceware/libabigail/${UPSTREAM_FILENAME}"
 
-readonly UPSTREAM_SHA512="5bdf5ec49a5931a61bf28317b41eee583d6277d00ac621b2d2a97bbc0d816c3662bcfe13a5ac7aeee11c947afb69a5a0a9a8015fcebad09965b45af9b1e23606"
+readonly UPSTREAM_SHA512="e3dcc0b5657b1448d0c6925108f0ff77bef633a1757656285594513124585c3f70b10c7733ec2a5916a6cbd7fd4e17e48b375fd69f58fe7cc974f18bb9098c89"
 
 # Directory (relative to ${UPSTREAM_TOPDIR}) to strip in its entirety. The
 # PR30329 fixture set is a libabigail abidiff regression test built around a

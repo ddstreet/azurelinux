@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# kf6-karchive: deterministic strip-and-repack of upstream `karchive-6.23.0.tar.xz`
+# kf6-karchive: deterministic strip-and-repack of upstream `karchive-6.29.0.tar.xz`
 # with autotest fixtures that trip anti-malware scanning on the AZL
 # RPM-signing pipeline removed. Rationale lives in the comp.toml `replace-reason` field.
 #
 # Usage:   bash base/comps/kf6-karchive/modify_source.sh
-# Output:  base/build/work/scratch/kf6-karchive/karchive-6.23.0.tar.xz (+ .sha512)
+# Output:  base/build/work/scratch/kf6-karchive/karchive-6.29.0.tar.xz (+ .sha512)
 # The upstream tarball is cached under a `.upstream` suffix; re-runs reuse it.
 
 set -euo pipefail
@@ -13,14 +13,14 @@ set -euo pipefail
 # --- Constants --------------------------------------------------------------
 
 readonly COMPONENT="kf6-karchive"
-readonly UPSTREAM_VERSION="6.23.0"
+readonly UPSTREAM_VERSION="6.29.0"
 # KDE stable URL is .../stable/frameworks/<MAJOR>.<MINOR>/<filename>.
 readonly UPSTREAM_MAJMIN="${UPSTREAM_VERSION%.*}"
 readonly UPSTREAM_FILENAME="karchive-${UPSTREAM_VERSION}.tar.xz"
 readonly UPSTREAM_TOPDIR="karchive-${UPSTREAM_VERSION}"
 readonly UPSTREAM_URL="https://download.kde.org/stable/frameworks/${UPSTREAM_MAJMIN}/${UPSTREAM_FILENAME}"
 
-readonly UPSTREAM_SHA512="28e10e9de84304a0d025fd1304738de2fc15812cbca33c77ed174e3ec614ebd4b2ff2896380b600f978682cdecdb464e1b8bd0abacde1d3d92197d18d6957cd8"
+readonly UPSTREAM_SHA512="42f42f3ed40e0636532d6c15833cfb4f96539ffefc5e17059b07c2776e239a6963a6fa974789f7eeee6e17151a494edc40583ec0cb4a3fff04e6232d22185003"
 
 # Paths (relative to ${UPSTREAM_TOPDIR}) to strip. Each is a karchive autotest
 # fixture flagged as an encrypted or unscannable payload by anti-malware

@@ -51,9 +51,9 @@ azl_release = "5"
 # unmodified upstream tarball alongside our repacked one. This is handled
 # by `replace-upstream = true` on the source-files entry below.
 [[components.firefox.source-files]]
-filename = "firefox-148.0.source.tar.xz"
-hash = "c9c9f29fbd8f889bf3cf3d88776e1a62da7b2a65d386538d2bd048dd70caaaf8324adb5303a5fa9aa73c2cf6eb9f89cb4b34f9e67c4208d88636dd5376af90a9"
+filename = "firefox-155.0.source.tar.xz"
+hash = "ab8e762bbff14e45e3ba4cc2653c886c9dab708192e842b349753fcf1e0693f1d4f558ccd4b454098b1814f9a1d04bb449ce0b6df4225d8423bbad4450d5c64a"
 hash-type = "SHA512"
-origin = { type = "download", uri = "https://azltempstaginglookaside.blob.core.windows.net/repo/pkgs_modified/firefox/firefox-148.0.source.tar.xz/sha512/c9c9f29fbd8f889bf3cf3d88776e1a62da7b2a65d386538d2bd048dd70caaaf8324adb5303a5fa9aa73c2cf6eb9f89cb4b34f9e67c4208d88636dd5376af90a9/firefox-148.0.source.tar.xz" }
+origin = { type = "download", uri = "https://azltempstaginglookaside.blob.core.windows.net/repo/pkgs_modified/firefox/firefox-155.0.source.tar.xz/sha512/ab8e762bbff14e45e3ba4cc2653c886c9dab708192e842b349753fcf1e0693f1d4f558ccd4b454098b1814f9a1d04bb449ce0b6df4225d8423bbad4450d5c64a/firefox-155.0.source.tar.xz" }
 replace-upstream = true
 replace-reason = "AZL-repacked tarball with malware-flagged upstream test fixtures stripped (trips RPM signing pipeline); see modify_source.sh REMOVE_PATHS"
