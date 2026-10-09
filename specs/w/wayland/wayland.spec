@@ -2,8 +2,8 @@
 # Do not edit manually; changes may be overwritten.
 
 Name:           wayland
-Version:        1.26.0
-Release: 5%{?dist}
+Version:        1.25.0
+Release: 6%{?dist}
 Summary:        Wayland Compositor Infrastructure
 
 # SPDX
@@ -21,7 +21,6 @@ BuildRequires:  expat-devel
 BuildRequires:  graphviz
 BuildRequires:  libxml2-devel
 BuildRequires:  libxslt
-BuildRequires:  mdbook
 BuildRequires:  meson
 BuildRequires:  pkgconfig(libffi)
 BuildRequires:  xmlto
@@ -67,9 +66,6 @@ developing applications that use %{name}.
 %package doc
 Summary: Wayland development documentation
 BuildArch: noarch
-# Required for mdbook generated docs
-Requires: adobe-source-code-pro-fonts
-Requires: open-sans-fonts
 
 %description doc
 Wayland development documentation
@@ -146,9 +142,6 @@ Wayland server library
 %meson_test
 
 %changelog
-* Thu Jul 16 2026 Neal Gompa <ngompa@fedoraproject.org> - 1.26.0-1
-- Update to 1.26.0
-
 * Sun Jun 07 2026 Neal Gompa <ngompa@fedoraproject.org> - 1.25.0-1
 - Update to 1.25.0
 - Modernize spec
