@@ -1,0 +1,26 @@
+From 7c9849db648e2a2103f3069bb86ef24293c75f26 Mon Sep 17 00:00:00 2001
+From: Fabio Valentini <decathorpe@gmail.com>
+Date: Wed, 24 Jun 2026 14:44:00 +0200
+Subject: [PATCH] Remove references to TOC tests that depend on the "select"
+ crate
+
+---
+ tests/testsuite/main.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/testsuite/main.rs b/tests/testsuite/main.rs
+index 9ef11dd..822d939 100644
+--- a/tests/testsuite/main.rs
++++ b/tests/testsuite/main.rs
+@@ -22,7 +22,7 @@ mod rendering;
+ mod search;
+ mod test;
+ mod theme;
+-mod toc;
++//mod toc;
+ 
+ mod prelude {
+     pub use crate::book_test::{BookTest, glob_one, read_to_string};
+-- 
+2.54.0
+
