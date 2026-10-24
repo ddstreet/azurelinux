@@ -188,6 +188,7 @@ components = [
     "sssd",
     "superlu_dist",
     "trivy",
+    "uv",
     "yq",
 ]
 
