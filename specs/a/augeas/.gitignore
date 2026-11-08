@@ -1,0 +1,4 @@
+/.build-*.log
+/augeas-*.tar.gz
+/gnulib-*.tar.gz
+/clog

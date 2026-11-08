@@ -1,0 +1,4 @@
+noarch/
+.build*.log
+*.src.rpm
+/ipxe-*.tar.xz

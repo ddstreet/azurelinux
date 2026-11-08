@@ -1,0 +1,13 @@
+--- mecab-0.97/src/viterbi.cpp.debug	2007-11-26 02:27:12.000000000 +0900
++++ mecab-0.97/src/viterbi.cpp	2008-04-08 16:56:12.000000000 +0900
+@@ -67,6 +67,10 @@
+ 
+     copy_sentence_ = param.get<bool>("allocate-sentence");
+     cost_factor_ = param.get<int>("cost-factor");
++
++    // http://lists.sourceforge.jp/mailman/archives/mecab-users/2008-April/000324.html
++    if ( cost_factor_ <= 0 ) cost_factor_ = 700;
++
+     CHECK_FALSE(cost_factor_ > 0) << "cost-factor is empty";
+ 
+     set_theta(param.get<double>("theta"));

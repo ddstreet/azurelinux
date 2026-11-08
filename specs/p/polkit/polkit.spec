@@ -7,7 +7,7 @@
 Summary: An authorization framework
 Name: polkit
 Version: 126
-Release: 10%{?dist}
+Release: 11%{?dist}
 License: LGPL-2.0-or-later
 URL: https://github.com/polkit-org/polkit
 Source0: https://github.com/polkit-org/polkit/archive/refs/tags/%{version}.tar.gz
@@ -168,6 +168,9 @@ rm -f $RPM_BUILD_ROOT%{_libdir}/*.la
 %{_libdir}/girepository-1.0/*.typelib
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 126-11
+- Render component as lockless
+
 * Fri Mar 27 2026 Jan Rybar <jrybar@redhat.com> - 126-6.2
 - CVE-2026-4897 aisle.com fix of unsanitized getline
 

@@ -1,0 +1,22 @@
+#
+# Various headers and libs used by the compiler are instgalled in /usr/lib/gcc/
+#
+addFilter(r'devel-file-in-non-devel-package /usr/lib/gcc/.*/include/.*\.h')
+addFilter(r'devel-file-in-non-devel-package /usr/lib/gcc/.*/include-fixed/.*\.h')
+addFilter(r'devel-file-in-non-devel-package /usr/lib/gcc/.*/install-tools/.*\.h')
+addFilter(r'devel-file-in-non-devel-package /usr/lib/gcc/.*/libgcc.a')
+addFilter(r'devel-file-in-non-devel-package /usr/lib/gcc/.*/libgcov.a')
+addFilter(r'non-standard-dir-in-usr .*-linux-gnu.*')
+addFilter(r'only-non-binary-in-usr-lib')
+
+#
+# gcc installs wrappers for ar, nm and ranlib into /usr/bin/ for some reason.
+#
+addFilter(r'no-manual-page-for-binary .*-ar')
+addFilter(r'no-manual-page-for-binary .*-nm')
+addFilter(r'no-manual-page-for-binary .*-ranlib')
+
+#
+# Sometimes gcc wants to install an empty macro list for an arch
+#
+addFilter(r'zero-length /usr/lib/gcc/h8300-elf/8/install-tools/macro_list')

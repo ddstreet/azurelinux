@@ -1,0 +1,14 @@
+- hosts: localhost
+  roles:
+    - role: standard-test-beakerlib
+      tags:
+        - classic
+      tests:
+        - miscellaneous-tests
+      required_packages:
+        - lldpad
+        - python3
+        - tcpdump
+        - systemd
+        - iproute
+        - python3-pyroute2

@@ -13,7 +13,7 @@
 
 Name:           python-sphinx-theme-builder
 Version:        0.2.0
-Release:        0.25.%{prerel}%{?dist}
+Release:        0.26.%{prerel}%{?dist}
 Summary:        Streamline the Sphinx theme development workflow
 
 # Most of the code is MIT.  However,
@@ -90,6 +90,9 @@ rm %{buildroot}%{_bindir}/stb
 %license LICENSE
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 0.2.0-0.26.b2
+- Render component as lockless
+
 * Fri Sep 19 2025 Python Maint <python-maint@redhat.com> - 0.2.0-0.25.b2
 - Rebuilt for Python 3.14.0rc3 bytecode
 

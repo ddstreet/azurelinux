@@ -3,7 +3,7 @@
 
 Name:           nftables
 Version:        1.1.3
-Release: 10%{?dist}
+Release:        11%{?dist}
 # Upstream released a 0.100 version, then 0.4. Need Epoch to get back on track.
 Epoch:          1
 Summary:        Netfilter Tables userspace utilities
@@ -153,6 +153,9 @@ fi
 %{_unitdir}/nftables.service
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1:1.1.3-11
+- Render component as lockless
+
 * Fri Feb 27 2026 Phil Sutter <psutter@redhat.com> - 1:1.1.3-6.1
 - src: netlink: fix crash when ops doesn't support udata
 

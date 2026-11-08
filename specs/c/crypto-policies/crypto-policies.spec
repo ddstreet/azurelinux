@@ -14,7 +14,7 @@
 
 Name:           crypto-policies
 Version:        %{git_date}
-Release:        1.git%{git_commit_hash}%{?dist}
+Release:        2.git%{git_commit_hash}%{?dist}
 Summary:        System-wide crypto policies
 
 License:        LGPL-2.1-or-later
@@ -292,6 +292,9 @@ exit 0
 %{_datarootdir}/crypto-policies/python
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 20251125-2.git63291f8
+- Render component as lockless
+
 * Tue Nov 25 2025 Alexander Sosedkin <asosedkin@redhat.com> - 20251125-1.git63291f8
 - sequoia: register "eddsa" as an alias to EDDSA-ED25519
 

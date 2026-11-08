@@ -8,7 +8,7 @@
 
 Name:           libinput
 Version:        1.30.4
-Release:        1%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
+Release:        2%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 Summary:        Input device library
 
 # SPDX
@@ -164,6 +164,9 @@ intended to be run by users.
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.30.4-2
+- Render component as lockless
+
 * Thu Jun 04 2026 Peter Hutterer <peter.hutterer@redhat.com> - 1.30.4-1
 - libinput 1.30.4
 

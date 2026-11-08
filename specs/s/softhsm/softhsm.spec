@@ -7,7 +7,7 @@
 Summary: Software version of a PKCS#11 Hardware Security Module
 Name: softhsm
 Version: 2.6.1
-Release: %{?prever:0.}13%{?prever:.%{prever}}%{?dist}.1
+Release: %{?prever:0.}13%{?prever:.%{prever}}%{?dist}.2
 License: BSD-2-clause
 Url: http://www.opendnssec.org/
 Source: http://dist.opendnssec.org/source/%{?prever:testing/}%{name}-%{version}.tar.gz
@@ -149,6 +149,9 @@ if [ -f /var/softhsm/slot0.db ]; then
 fi
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 2.6.1-13.2
+- Render component as lockless
+
 * Fri Jul 25 2025 Fedora Release Engineering <releng@fedoraproject.org> - 2.6.1-13.1
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 

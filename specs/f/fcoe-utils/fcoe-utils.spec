@@ -10,7 +10,7 @@
 
 Name:               fcoe-utils
 Version:            1.0.34
-Release:            12.git%{shortcommit0}%{?dist}
+Release:            13.git%{shortcommit0}%{?dist}
 Summary:            Fibre Channel over Ethernet utilities
 License:            GPL-2.0-only
 URL:                http://www.open-fcoe.org
@@ -89,6 +89,9 @@ done
 %{_libexecdir}/fcoe/
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.0.34-13.gitb233050
+- Render component as lockless
+
 * Wed Jul 23 2025 Fedora Release Engineering <releng@fedoraproject.org> - 1.0.34-12.gitb233050
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 

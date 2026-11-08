@@ -1,0 +1,33 @@
+From 5b2b9acd762e859822c99c5262d0bcbccff619de Mon Sep 17 00:00:00 2001
+From: Adam Williamson <awilliam@redhat.com>
+Date: Wed, 15 Mar 2023 12:35:38 -0700
+Subject: [PATCH] xattrs: fix out of bounds access (again)
+
+This restores the fix from c5db34e , which was somehow lost in
+83b2f3a . `j` is not available after the loop is done, we need
+to use i. We use `i - 1` because, of course, list indexes start
+at 0.
+
+Fixes https://github.com/plougher/squashfs-tools/issues/230
+
+Signed-off-by: Adam Williamson <awilliam@redhat.com>
+---
+ squashfs-tools/xattr.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/squashfs-tools/xattr.c b/squashfs-tools/xattr.c
+index d48d950..32343f5 100644
+--- a/squashfs-tools/xattr.c
++++ b/squashfs-tools/xattr.c
+@@ -838,7 +838,7 @@ int read_xattrs(void *d, int type)
+ 	for(j = 1;  j < i; j++)
+ 		xattr_list[j - 1].vnext = &xattr_list[j];
+ 
+-	xattr_list[j].vnext = NULL;
++	xattr_list[i - 1].vnext = NULL;
+ 	head = xattr_list;
+ 
+ 	sort_xattr_list(&head, i);
+-- 
+2.39.2
+

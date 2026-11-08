@@ -12,7 +12,7 @@
 
 Name:           lirc
 Version:        0.10.2
-Release:        4%{?tag:.}%{?tag}%{?dist}
+Release:        5%{?tag:.}%{?tag}%{?dist}
 Summary:        The Linux Infrared Remote Control package
 
 %global repo    http://downloads.sourceforge.net/lirc/LIRC/%{version}
@@ -427,6 +427,9 @@ systemd-tmpfiles --create %{_tmpfilesdir}/lirc.conf
 %{_udevrulesdir}/99-remote-control-lirc.rules
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 0.10.2-5
+- Render component as lockless
+
 * Fri Sep 19 2025 Python Maint <python-maint@redhat.com> - 0.10.2-4
 - Rebuilt for Python 3.14.0rc3 bytecode
 

@@ -19,7 +19,7 @@ URL: http://isl.gforge.inria.fr/
 #
 # % global buildid .local
 
-Release: 23%{?buildid}%{?dist}
+Release: 24%{?buildid}%{?dist}
 
 BuildRequires:  gcc
 BuildRequires: gmp-devel
@@ -112,6 +112,9 @@ cd isl-%{version}
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 0.16.1-24
+- Render component as lockless
+
 * Thu Jul 24 2025 Fedora Release Engineering <releng@fedoraproject.org> - 0.16.1-23
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 

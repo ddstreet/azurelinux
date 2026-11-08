@@ -1,0 +1,41 @@
+diff -up texlive-base-20180414/source/texk/kpathsea/mktexlsr.selinux texlive-base-20180414/source/texk/kpathsea/mktexlsr
+--- texlive-base-20180414/source/texk/kpathsea/mktexlsr.selinux	2018-01-16 19:55:32.000000000 -0500
++++ texlive-base-20180414/source/texk/kpathsea/mktexlsr	2018-04-30 13:10:12.447909163 -0400
+@@ -228,7 +228,8 @@ for TEXMFLS_R in "$@"; do
+   until PERMS=`kpsestat = "$db_file"`; do sleep 1; done
+   chmod $PERMS "$db_file_tmp"
+   rm -f "$db_file"
+-  mv "$db_file_tmp" "$db_file"
++  # selinux fix
++  cp "$db_file_tmp" "$db_file"
+   rm -rf "$db_dir_tmp"
+ done
+ 
+diff -up texlive-base-20180414/source/texk/texlive/linked_scripts/texlive/fmtutil.pl.selinux texlive-base-20180414/source/texk/texlive/linked_scripts/texlive/fmtutil.pl
+--- texlive-base-20180414/source/texk/texlive/linked_scripts/texlive/fmtutil.pl.selinux	2018-04-30 13:10:12.447909163 -0400
++++ texlive-base-20180414/source/texk/texlive/linked_scripts/texlive/fmtutil.pl	2018-04-30 13:12:43.035361954 -0400
+@@ -719,7 +719,7 @@ sub rebuild_one_format {
+ 
+   TeXLive::TLUtils::mkdirhier($destdir);
+   
+-  if (!File::Copy::move( $logfile, "$destdir/$logfile")) {
++  if (!File::Copy::copy( $logfile, "$destdir/$logfile")) {
+     print_deferred_error("Cannot move $logfile to $destdir.\n");
+   }
+   if ($opts{'recorder'}) {
+@@ -727,13 +727,13 @@ sub rebuild_one_format {
+     # package dependencies for each format.  Unfortunately omega-based
+     # engines gratuitiously changed the extension from .fls to .ofl.
+     my $recfile = $fmt . ($fmt =~ m/^(aleph|lamed)$/ ? ".ofl" : ".fls");
+-    if (!File::Copy::move( $recfile, "$destdir/$recfile")) {
++    if (!File::Copy::copy( $recfile, "$destdir/$recfile")) {
+       print_deferred_error("Cannot move $recfile to $destdir.\n");
+     }
+   }
+ 
+   my $destfile = "$destdir/$fmtfile";
+-  if (File::Copy::move( $fmtfile, $destfile )) {
++  if (File::Copy::copy( $fmtfile, $destfile )) {
+     print_info("$destfile installed.\n");
+     #
+     # original fmtutil.sh did some magic trick for mplib-luatex.mem

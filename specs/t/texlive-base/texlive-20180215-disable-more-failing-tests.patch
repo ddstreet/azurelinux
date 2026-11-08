@@ -1,0 +1,117 @@
+diff -up ./source/libs/xpdf/xpdf-src/misc/xpdf.dt ./source/libs/xpdf/xpdf-src/misc/xpdf
+diff -up ./source/texk/web2c/am/texmf.am.dt ./source/texk/web2c/am/texmf.am
+--- ./source/texk/web2c/am/texmf.am.dt	2018-02-15 10:07:08.302267160 +0100
++++ ./source/texk/web2c/am/texmf.am	2018-02-15 10:07:16.703189440 +0100
+@@ -73,7 +73,7 @@ DISTCLEANFILES += $(nodist_tex_SOURCES)
+ 
+ # TeX tests
+ #
+-tex_tests = triptest.test tests/write18-quote-test.pl
++tex_tests = tests/write18-quote-test.pl
+ triptest.log: tex$(EXEEXT) dvitype$(EXEEXT) pltotf$(EXEEXT) tftopl$(EXEEXT)
+ tests/write18-quote-test.log: tex$(EXEEXT)
+ EXTRA_DIST += $(tex_tests)
+@@ -201,7 +201,7 @@ DISTCLEANFILES += $(nodist_libmf_a_SOURC
+ 
+ # Metafont tests
+ #
+-mf_tests = mftraptest.test
++mf_tests =
+ mftraptest.log: mf$(EXEEXT) gftype$(EXEEXT) tftopl$(EXEEXT)
+ EXTRA_DIST += $(mf_tests)
+ if MF
+diff -up ./source/texk/web2c/eptexdir/am/eptex.am.dt ./source/texk/web2c/eptexdir/am/eptex.am
+--- ./source/texk/web2c/eptexdir/am/eptex.am.dt	2018-02-15 10:05:27.165202818 +0100
++++ ./source/texk/web2c/eptexdir/am/eptex.am	2018-02-15 10:05:30.931167978 +0100
+@@ -81,7 +81,7 @@ EXTRA_DIST += \
+ 
+ # e-pTeX Tests
+ #
+-eptex_tests = eptexdir/eptriptest.test eptexdir/pdfprimitive.test
++eptex_tests =
+ eptexdir/eptriptest.log: eptex$(EXEEXT) dvitype$(EXEEXT) pltotf$(EXEEXT) tftopl$(EXEEXT)
+ eptexdir/pdfprimitive.log: eptex$(EXEEXT)
+ 
+diff -up ./source/texk/web2c/euptexdir/am/euptex.am.dt ./source/texk/web2c/euptexdir/am/euptex.am
+--- ./source/texk/web2c/euptexdir/am/euptex.am.dt	2018-02-15 10:05:50.468987226 +0100
++++ ./source/texk/web2c/euptexdir/am/euptex.am	2018-02-15 10:05:52.884964874 +0100
+@@ -82,7 +82,7 @@ EXTRA_DIST += \
+ 
+ # e-upTeX Tests
+ #
+-euptex_tests = euptexdir/euptriptest.test euptexdir/pdfprimitive.test
++euptex_tests =
+ euptexdir/euptriptest.log: euptex$(EXEEXT) dvitype$(EXEEXT) pltotf$(EXEEXT) tftopl$(EXEEXT)
+ euptexdir/pdfprimitive.log: euptex$(EXEEXT)
+ 
+diff -up ./source/texk/web2c/mfluadir/am/mflua.am.dt ./source/texk/web2c/mfluadir/am/mflua.am
+--- ./source/texk/web2c/mfluadir/am/mflua.am.dt	2018-02-15 10:06:02.271878033 +0100
++++ ./source/texk/web2c/mfluadir/am/mflua.am	2018-02-15 10:06:05.055852277 +0100
+@@ -110,7 +110,7 @@ EXTRA_DIST += \
+ 
+ # MFLua tests
+ #
+-mflua_tests = mfluadir/mfluatraptest.test
++mflua_tests =
+ mfluadir/mfluatraptest.log: mflua$(EXEEXT) gftype$(EXEEXT) tftopl$(EXEEXT)
+ EXTRA_DIST += $(mflua_tests)
+ 
+diff -up ./source/texk/web2c/mfluajitdir/am/mfluajit.am.dt ./source/texk/web2c/mfluajitdir/am/mfluajit.am
+--- ./source/texk/web2c/mfluajitdir/am/mfluajit.am.dt	2018-02-15 10:05:39.915084864 +0100
++++ ./source/texk/web2c/mfluajitdir/am/mfluajit.am	2018-02-15 10:05:42.588060135 +0100
+@@ -106,7 +106,7 @@ EXTRA_DIST += \
+ 
+ # MFLuaJIT tests
+ #
+-mfluajit_tests = mfluajitdir/mfluajittraptest.test
++mfluajit_tests =
+ mfluajitdir/mfluajittraptest.log: mfluajit$(EXEEXT) gftype$(EXEEXT) tftopl$(EXEEXT)
+ EXTRA_DIST += $(mfluajit_tests)
+ 
+diff -up ./source/texk/web2c/pdftexdir/am/pdftex.am.dt ./source/texk/web2c/pdftexdir/am/pdftex.am
+--- ./source/texk/web2c/pdftexdir/am/pdftex.am.dt	2018-02-15 10:06:15.873752196 +0100
++++ ./source/texk/web2c/pdftexdir/am/pdftex.am	2018-02-15 10:06:20.268711537 +0100
+@@ -86,7 +86,7 @@ EXTRA_DIST += \
+ 
+ # pdfTeX Tests
+ #
+-pdftex_tests = pdftexdir/wprob.test pdftexdir/pdftex.test pdftexdir/pdfimage.test
++pdftex_tests = pdftexdir/pdftex.test
+ pdftexdir/wprob.log pdftexdir/pdftex.log pdftexdir/pdfimage.log: pdftex$(EXEEXT)
+ 
+ EXTRA_DIST += $(pdftex_tests)
+diff -up ./source/texk/web2c/ptexdir/am/ptex.am.dt ./source/texk/web2c/ptexdir/am/ptex.am
+--- ./source/texk/web2c/ptexdir/am/ptex.am.dt	2018-02-15 10:06:35.612569585 +0100
++++ ./source/texk/web2c/ptexdir/am/ptex.am	2018-02-15 10:06:40.374525531 +0100
+@@ -166,7 +166,7 @@ EXTRA_DIST += \
+ 
+ # pTeX Tests
+ #
+-ptex_tests = ptexdir/ptriptest.test
++ptex_tests =
+ ptexdir/ptriptest.log: ptex$(EXEEXT) dvitype$(EXEEXT) pltotf$(EXEEXT) tftopl$(EXEEXT)
+ pweb_tests = \
+ 	ptexdir/pbibtex.test \
+diff -up ./source/texk/web2c/uptexdir/am/uptex.am.dt ./source/texk/web2c/uptexdir/am/uptex.am
+--- ./source/texk/web2c/uptexdir/am/uptex.am.dt	2018-02-15 10:06:47.072463565 +0100
++++ ./source/texk/web2c/uptexdir/am/uptex.am	2018-02-15 10:06:49.552440622 +0100
+@@ -156,7 +156,7 @@ EXTRA_DIST += \
+ 	uptexdir/ChangeLog
+ 
+ # upTeX Tests
+-uptex_tests = uptexdir/uptriptest.test
++uptex_tests =
+ uptexdir/uptriptest.log: uptex$(EXEEXT) dvitype$(EXEEXT) pltotf$(EXEEXT) tftopl$(EXEEXT)
+ upweb_tests = \
+ 	uptexdir/upbibtex.test \
+diff -up ./source/texk/web2c/xetexdir/am/xetex.am.dt ./source/texk/web2c/xetexdir/am/xetex.am
+--- ./source/texk/web2c/xetexdir/am/xetex.am.dt	2018-02-15 10:06:56.190379212 +0100
++++ ./source/texk/web2c/xetexdir/am/xetex.am	2018-02-15 10:06:57.898363410 +0100
+@@ -198,7 +198,6 @@ EXTRA_DIST += \
+ # XeTeX Tests
+ #
+ xetex_tests = \
+-	xetexdir/xetex-bug73.test \
+ 	xetexdir/xetex.test
+ xetexdir/xetex-bug73.log xetexdir/xetex.log: xetex$(EXEEXT)
+ 

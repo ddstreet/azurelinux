@@ -1,0 +1,25 @@
+summary: Run cts regression tests
+discover:
+  how: shell
+  tests:
+    - name: tier0
+      test: /usr/share/pacemaker/tests/cts-regression cli scheduler
+      duration: 30m
+      tier: 0
+provision:
+  how: container
+prepare:
+  - name: Disable installing everything from srpm
+    how: install
+    exclude: ".*"
+  - name: Install the main package
+    how: install
+    package:
+      - pacemaker
+      - pacemaker-cts
+      - python3-pacemaker
+  - name: Create /var/lib/corosync for the case systemd hasn't done yet
+    how: shell
+    script: mkdir -m 0755 -p /var/lib/corosync
+execute:
+  how: tmt

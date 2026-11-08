@@ -1,9 +1,6 @@
 # This spec file has been modified by azldev to include build configuration overlays.
 # Do not edit manually; changes may be overwritten.
 
-# All Azure Linux specs with overlays include this macro file, irrespective of whether new macros have been added.
-%{load:%{_sourcedir}/openbios.azl.macros}
-
 %global hash c3a19c1
 %global date 20240913
 
@@ -16,7 +13,7 @@
 
 Name:           openbios
 Version:        %{date}
-Release: %[1 + %{azl_release}].git%{hash}%{?dist}
+Release:        3.git%{hash}%{?dist}
 Epoch:          1
 Summary:        OpenBIOS implementation of IEEE 1275-1994
 
@@ -32,7 +29,6 @@ BuildArch:      noarch
 # date=`git log -1 --format='%cd' --date=short | tr -d -`
 # git archive --prefix openbios-${date}-git${hash}/ ${hash} | xz -7e > ../openbios-${date}-git${hash}.tar.xz
 Source0:        %{name}-%{date}-git%{hash}.tar.xz
-Source9999: openbios.azl.macros
 
 # Note that these packages build 32 bit binaries with the -m32 flag.
 BuildRequires: make
@@ -105,6 +101,9 @@ cp -a obj-sparc64/openbios-builtin.elf $qemudir/openbios-sparc64
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1:20240913-3.gitc3a19c1
+- Render component as lockless
+
 * Mon Dec 15 2025 Daniel P. Berrangé <berrange@redhat.com> - 1:20240913-1.gitc3a19c1
 - Update to openbios c3a19c1 to match qemu
 

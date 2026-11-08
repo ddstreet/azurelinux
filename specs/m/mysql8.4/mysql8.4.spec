@@ -107,7 +107,7 @@ ExcludeArch: %{ix86}
 
 Name:             %{majorname}%{majorversion}
 Version:          %{package_version}
-Release:          1%{?with_debug:.debug}%{?dist}
+Release:          2%{?with_debug:.debug}%{?dist}
 Summary:          MySQL client programs and shared libraries
 URL:              http://www.mysql.com
 
@@ -1128,6 +1128,9 @@ popd
 %endif
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 8.4.10-2
+- Render component as lockless
+
 * Tue Jun 23 2026 Michal Schorm <mschorm@redhat.com> - 8.4.10-1
 - Rebase to 8.4.10
 

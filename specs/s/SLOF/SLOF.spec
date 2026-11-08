@@ -14,7 +14,7 @@
 
 Name:           SLOF
 Version:        %{gittagdate}
-Release:        8.git%{gittagcommit}%{?dist}
+Release:        9.git%{gittagcommit}%{?dist}
 Summary:        Slimline Open Firmware
 
 License:        BSD-3-Clause
@@ -79,6 +79,9 @@ install -c -m 0644 boot_rom.bin %{buildroot}%{_datadir}/%{targetdir}/slof.bin
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 20220719-9.git6b6c16b4
+- Render component as lockless
+
 * Wed Jul 23 2025 Fedora Release Engineering <releng@fedoraproject.org> - 20220719-8.git6b6c16b4
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 

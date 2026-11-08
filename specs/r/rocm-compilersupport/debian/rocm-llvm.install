@@ -1,0 +1,10 @@
+/usr/bin/hipcc*
+/usr/bin/hipvars.pm
+/usr/bin/hipconfig*
+/usr/lib/cmake/*
+/usr/include/*
+/usr/lib/rocm/llvm/*
+/usr/lib/libamd_comgr.*
+/usr/share/doc/amd_comgr/*
+/usr/share/doc/hipcc/*
+

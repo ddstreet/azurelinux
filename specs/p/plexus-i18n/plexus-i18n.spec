@@ -3,7 +3,7 @@
 
 Name:           plexus-i18n
 Version:        1.0
-Release:        0.36.b10.4%{?dist}
+Release:        0.37.b10.4%{?dist}
 Summary:        Plexus I18N Component
 # Automatically converted from old format: ASL 2.0 - review is highly recommended.
 License:        Apache-2.0
@@ -55,6 +55,9 @@ is like a J2EE application server, without all the baggage.
 %files -f .mfiles
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.0-0.37.b10.4
+- Render component as lockless
+
 * Tue Jul 29 2025 jiri vanek <jvanek@redhat.com> - 1.0-0.36.b10.4
 - Rebuilt for java-25-openjdk as preffered jdk
 

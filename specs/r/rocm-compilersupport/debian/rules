@@ -1,0 +1,253 @@
+#!/usr/bin/make -f
+
+amd_device_libs_prefix = lib/rocm/llvm/lib/clang/$(llvm_maj_ver)
+deb_inst               := $(CURDIR)/debian/tmp/
+build_stage1           := $(CURDIR)/build-llvm/
+build_stage2           := $(CURDIR)/build-llvm-2/
+build_devicelibs       := $(CURDIR)/build-devicelibs/
+_includedir            := /usr/include
+build_type             := RelWithDebInfo
+bundle_prefix          := /usr/lib/rocm/llvm
+llvm_maj_ver           := 19
+llvm_triple            := x86_64-gnu-linux
+targets_to_build       := "X86;AMDGPU"
+projects_to_build      := "clang;clang-tools-extra;lld"
+# Turn off build libc++, libc++abi
+# runtimes_to_build      := "compiler-rt;libcxx;libcxxabi"
+runtimes_to_build      := "compiler-rt"
+
+# Problems applying the build flags to the intermediate compiler
+# Clear all the flags
+CFLAGS                 :=
+CFLAGS_FOR_BUILD       :=
+CPPFLAGS               :=
+CPPFLAGS_FOR_BUILD     :=
+CXXFLAGS               :=
+CXXFLAGS_FOR_BUILD     :=
+LDFLAGS                :=
+LDFLAGS_FOR_BUILD      :=
+
+llvmrocm_cmake_config = \
+ -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+ -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+ -DBUILD_SHARED_LIBS=OFF \
+ -DBUILD_TESTING=OFF \
+ -DCLANG_ENABLE_STATIC_ANALYZER=OFF \
+ -DCLANG_ENABLE_ARCMT=OFF \
+ -DCMAKE_BUILD_TYPE=$(build_type) \
+ -DCMAKE_INSTALL_DO_STRIP=ON \
+ -DCMAKE_INSTALL_PREFIX=$(bundle_prefix) \
+ -DCOMPILER_RT_BUILD_BUILTINS=ON \
+ -DCOMPILER_RT_BUILD_CTX_PROFILE=OFF \
+ -DCOMPILER_RT_BUILD_GWP_ASAN=OFF \
+ -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
+ -DCOMPILER_RT_BUILD_MEMPROF=OFF \
+ -DCOMPILER_RT_BUILD_ORC=OFF \
+ -DCOMPILER_RT_BUILD_PROFILE=OFF \
+ -DCOMPILER_RT_BUILD_SANITIZERS=OFF \
+ -DCOMPILER_RT_BUILD_XRAY=OFF \
+ -DENABLE_LINKER_BUILD_ID=ON \
+ -DLIBCXX_INCLUDE_BENCHMARKS=OFF \
+ -DLIBCXXABI_USE_LLVM_UNWINDER=OFF \
+ -DLLVM_BINUTILS_INCDIR=$(_includedir) \
+ -DLLVM_BUILD_LLVM_DYLIB=ON \
+ -DLLVM_BUILD_RUNTIME=ON \
+ -DLLVM_DEFAULT_TARGET_TRIPLE=$(llvm_triple) \
+ -DLLVM_ENABLE_EH=ON \
+ -DLLVM_ENABLE_FFI=ON \
+ -DLLVM_ENABLE_OCAMLDOC=OFF \
+ -DLLVM_ENABLE_RTTI=ON \
+ -DLLVM_ENABLE_ZLIB=ON \
+ -DLLVM_ENABLE_ZSTD=ON \
+ -DLLVM_INCLUDE_BENCHMARKS=OFF \
+ -DLLVM_INCLUDE_EXAMPLES=OFF \
+ -DLLVM_INCLUDE_TESTS=OFF \
+ -DLLVM_TARGETS_TO_BUILD=$(targets_to_build) \
+ -DLLVM_TOOL_GOLD_BUILD=ON \
+ -DLLVM_TOOL_LLVM_AS_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_DIS_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_DLANG_DEMANGLE_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_ISEL_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_ITANIUM_DEMANGLE_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_MC_ASSEMBLE_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_MC_DISASSEMBLE_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_MICROSOFT_DEMANGLE_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_OPT_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_RUST_DEMANGLE_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_SPECIAL_CASE_LIST_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_YAML_NUMERIC_PARSER_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_LLVM_YAML_PARSER_FUZZER_BUILD=OFF \
+ -DLLVM_TOOL_VFABI_DEMANGLE_FUZZER_BUILD=OFF \
+ -DMLIR_INSTALL_AGGREGATE_OBJECTS=OFF \
+ -DLLVM_LINK_LLVM_DYLIB=ON \
+ -DLLVM_BUILD_TOOLS=ON \
+ -DLLVM_BUILD_UTILS=ON \
+ -DMLIR_BUILD_MLIR_C_DYLIB=ON
+
+llvmrocm_stage1_config = \
+ -DCMAKE_AR=$(build_stage1)/bin/llvm-ar \
+ -DCMAKE_C_COMPILER=$(build_stage1)/bin/clang \
+ -DCMAKE_CXX_COMPILER=$(build_stage1)/bin/clang++ \
+ -DCMAKE_LINKER=$(build_stage1)/bin/ld.lld \
+ -DCMAKE_RANLIB=$(build_stage1)/bin/llvm-ranlib \
+ -DLLVM_DIR=$(build_stage1)/lib/cmake/llvm \
+ -DClang_DIR=$(build_stage1)/lib/cmake/clang \
+ -DLLD_DIR=$(build_stage1)/lib/cmake/lld
+
+llvmrocm_tools_config = \
+ -DCMAKE_AR=$(build_stage2)/bin/llvm-ar \
+ -DCMAKE_C_COMPILER=$(build_stage2)/bin/clang \
+ -DCMAKE_CXX_COMPILER=$(build_stage2)/bin/clang++ \
+ -DCMAKE_LINKER=$(build_stage2)/bin/ld.lld \
+ -DCMAKE_RANLIB=$(build_stage2)/bin/llvm-ranlib \
+ -DLLVM_ROOT=$(build_stage2) \
+ -DClang_DIR=$(build_stage2)/lib/cmake/clang \
+ -DLLD_DIR=$(build_stage2)/lib/cmake/lld
+
+llvmrocm_devicelibs_config = \
+ -DAMDDeviceLibs_DIR=$(build_devicelibs)/lib/cmake/AMDDeviceLibs
+
+%:
+	dh $@
+
+dirs:
+	- mkdir stamps
+	- mkdir build-llvm
+	- mkdir build-llvm-2
+	- mkdir build-devicelibs
+	- mkdir build-comgr
+	- mkdir build-hipcc
+
+stamps/config-llvm: dirs
+	cmake -G Ninja -S llvm -B build-llvm \
+		$(llvmrocm_cmake_config) \
+	       -DCMAKE_INSTALL_PREFIX=$(bundle_prefix) \
+	       -DCMAKE_INSTALL_LIBDIR=lib \
+	       -DLLVM_ENABLE_PROJECTS=$(projects_to_build)
+	touch $@
+
+stamps/build-llvm: stamps/config-llvm
+	ninja -C build-llvm
+	touch $@
+
+# Turn off build libc++, libc++abi
+# dpkg-shlibdeps: error: cannot find library libc++abi.so.1 needed by
+#   debian/rocm-llvm/usr/lib/rocm/llvm/lib/libc++.so.1.0 (ELF format:
+#   'elf64-x86-64' abi: 'ELF:64:l:amd64:0'; RPATH: '')
+
+stamps/config-llvm-2: stamps/build-llvm
+	cmake -G Ninja -S llvm -B build-llvm-2 \
+		$(llvmrocm_cmake_config) \
+		$(llvmrocm_stage1_config) \
+		-DCMAKE_INSTALL_PREFIX=$(bundle_prefix) \
+		-DCMAKE_INSTALL_RPATH=$(bundle_prefix)/lib \
+		-DCMAKE_INSTALL_LIBDIR=lib \
+		-DCMAKE_SKIP_INSTALL_RPATH=OFF \
+		-DCLANG_DEFAULT_LINKER=lld \
+		-DLLVM_ENABLE_LLD=ON \
+		-DLLVM_TOOL_COMPILER_RT_BUILD=ON \
+		-DLLVM_TOOL_LIBCXXABI_BUILD=OFF \
+		-DLLVM_TOOL_LIBCXX_BUILD=OFF \
+		-DLLVM_ENABLE_PROJECTS=$(projects_to_build) \
+		-DLLVM_ENABLE_RUNTIMES=$(runtimes_to_build) 
+	touch $@
+
+stamps/build-llvm-2: stamps/config-llvm-2
+	ninja -C build-llvm-2
+	touch $@
+
+stamps/install-llvm-2: stamps/build-llvm-2
+	DESTDIR=$(deb_inst) \
+	ninja -C build-llvm-2 install
+	touch $@
+
+stamps/config-devicelibs: stamps/install-llvm-2
+	cmake -G Ninja -S amd/device-libs -B build-devicelibs \
+		$(llvmrocm_cmake_config) \
+		$(llvmrocm_tools_config) \
+	       -DCMAKE_INSTALL_PREFIX=/usr \
+	       -DCMAKE_INSTALL_LIBDIR=lib \
+	       -DROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_NEW="$(amd_device_libs_prefix)/amdgcn" \
+	       -DROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_OLD=""
+	touch $@
+
+stamps/build-devicelibs: stamps/config-devicelibs
+	ninja -C build-devicelibs
+	touch $@
+
+stamps/install-devicelibs: stamps/build-devicelibs
+	DESTDIR=$(deb_inst) \
+	ninja -C build-devicelibs install
+	touch $@
+
+stamps/config-comgr: stamps/install-devicelibs
+	cmake -G Ninja -S amd/comgr -B build-comgr \
+		$(llvmrocm_cmake_config) \
+		$(llvmrocm_tools_config) \
+		$(llvmrocm_devicelibs_config) \
+		-DCMAKE_INSTALL_RPATH=$(bundle_prefix)/lib \
+		-DBUILD_SHARED_LIBS=ON \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_INSTALL_LIBDIR=lib
+	touch $@
+
+stamps/build-comgr: stamps/config-comgr
+	ninja -C build-comgr
+	touch $@
+
+stamps/install-comgr: stamps/build-comgr
+	DESTDIR=$(deb_inst) \
+	ninja -C build-comgr install
+	touch $@
+
+stamps/config-hipcc: stamps/install-comgr
+	cmake -G Ninja -S amd/hipcc -B build-hipcc \
+		$(llvmrocm_cmake_config) \
+		$(llvmrocm_tools_config) \
+		$(llvmrocm_devicelibs_config) \
+		-DCMAKE_INSTALL_RPATH=$(bundle_prefix)/lib \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_INSTALL_LIBDIR=lib
+	touch $@
+
+stamps/build-hipcc: stamps/config-hipcc
+	ninja -C build-hipcc
+	touch $@
+
+stamps/install-hipcc: stamps/build-hipcc
+	DESTDIR=$(deb_inst) \
+	ninja -C build-hipcc install
+	touch $@
+
+override_dh_auto_configure: stamps/config-hipcc
+
+override_dh_auto_build: stamps/build-hipcc
+
+override_dh_auto_install: stamps/install-hipcc
+	rm -rf $(deb_inst)/usr/lib/ocaml
+	rm -rf $(deb_inst)/usr/hip
+	rm -rf $(deb_inst)/usr/share/doc/ROCm-Device-Libs/LICENSE.TXT
+
+override_dh_install: 
+	dh_install
+	dh_missing --list-missing
+
+# No docs
+override_dh_installdocs:
+
+# Too many DIE's
+override_dh_dwz:
+
+clean:
+	- rm -rf build-*
+	- rm -rf stamps
+	- rm -rf $(deb_inst)
+	- rm -rf debian/.debhelper
+	- rm -rf debian/rocm-llvm
+	- rm -rf libcxx/utils/libcxx/__pycache__
+
+override_dh_auto_clean: clean
+
+override_dh_ocamlinit:
+override_dh_ocamlclean:
+override_dh_ocaml:

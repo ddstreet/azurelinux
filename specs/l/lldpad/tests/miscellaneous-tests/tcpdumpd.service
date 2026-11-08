@@ -1,0 +1,10 @@
+[Unit]
+Description=TCPDumpd
+After=multi-user.target network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/tcpdump -pnnli lldpad ether proto 0x88cc -vvv -w "/tmp/lldpad-tcp-dump.pcap"
+
+[Install]
+WantedBy=multi-user.target

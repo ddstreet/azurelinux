@@ -1,0 +1,14 @@
+diff -up texlive-base-20190410/source/texk/kpathsea/mktexlsr.selinux texlive-base-20190410/source/texk/kpathsea/mktexlsr
+--- texlive-base-20190410/source/texk/kpathsea/mktexlsr.selinux	2018-01-16 19:55:32.000000000 -0500
++++ texlive-base-20190410/source/texk/kpathsea/mktexlsr	2019-05-23 14:58:50.837886937 -0400
+@@ -228,7 +228,8 @@ for TEXMFLS_R in "$@"; do
+   until PERMS=`kpsestat = "$db_file"`; do sleep 1; done
+   chmod $PERMS "$db_file_tmp"
+   rm -f "$db_file"
+-  mv "$db_file_tmp" "$db_file"
++  # selinux fix
++  cp "$db_file_tmp" "$db_file"
+   rm -rf "$db_dir_tmp"
+ done
+ 
+diff -up texlive-base-20190410/source/texk/texlive/linked_scripts/texlive/fmtutil.pl.selinux texlive-base-20190410/source/texk/texlive/linked_scripts/texlive/fmtutil.pl

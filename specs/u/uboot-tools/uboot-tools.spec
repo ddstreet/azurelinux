@@ -16,7 +16,7 @@
 
 Name:     uboot-tools
 Version:  2025.10
-Release:  1%{?candidate:.%{candidate}}%{?dist}
+Release:  2%{?candidate:.%{candidate}}%{?dist}
 Epoch:    1
 Summary:  U-Boot utilities
 # Automatically converted from old format: GPLv2+ BSD LGPL-2.1+ LGPL-2.0+ - review is highly recommended.
@@ -283,6 +283,9 @@ install -p -m 0755 builds/tools/env/fw_printenv %{buildroot}%{_bindir}
 %endif
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1:2025.10-2
+- Render component as lockless
+
 * Mon Oct 13 2025 Peter Robinson <pbrobinson@fedoraproject.org> - 1:2025.10-1
 - Update to 2025.10 GA (rhbz#2401964)
 - Fix booting when using FW device-tree (rhbz#2402498)

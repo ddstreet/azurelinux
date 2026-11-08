@@ -1,0 +1,429 @@
+From f8b49348d02d0220e20391665f7418f9212dac02 Mon Sep 17 00:00:00 2001
+From: Jon Rowe <hello@jonrowe.co.uk>
+Date: Fri, 18 Oct 2024 21:39:26 +0100
+Subject: [PATCH] Relax specs for Ruby 3.4 hash formatting
+
+---
+ .../matching_arguments.feature                |  6 +-
+ .../step_definitions/additional_cli_steps.rb  |  7 +-
+ spec/rspec/mocks/argument_matchers_spec.rb    | 14 ++--
+ spec/rspec/mocks/diffing_spec.rb              | 84 ++++++++++++-------
+ spec/rspec/mocks/double_spec.rb               |  9 +-
+ .../mocks/hash_excluding_matcher_spec.rb      |  9 +-
+ .../mocks/hash_including_matcher_spec.rb      |  9 +-
+ spec/rspec/mocks/matchers/receive_spec.rb     | 26 ++++--
+ .../expected_arg_verification_spec.rb         | 11 ++-
+ 9 files changed, 124 insertions(+), 51 deletions(-)
+
+diff --git a/features/setting_constraints/matching_arguments.feature b/features/setting_constraints/matching_arguments.feature
+index caea74248..cad5cea4c 100644
+--- a/features/setting_constraints/matching_arguments.feature
++++ b/features/setting_constraints/matching_arguments.feature
+@@ -73,7 +73,7 @@ Feature: Matching arguments
+       end
+       """
+     When I run `rspec keyword_example_spec.rb`
+-    Then it should fail with the following output:
++    Then it should fail with the following output, ignoring hash syntax:
+       | 2 examples, 1 failure                                                                 |
+       |                                                                                       |
+       | Failure/Error: dbl.foo(bar: "incorrect")                                              |
+@@ -100,7 +100,7 @@ Feature: Matching arguments
+       end
+       """
+     When I run `rspec keyword_example_spec.rb`
+-    Then it should fail with the following output:
++    Then it should fail with the following output, ignoring hash syntax:
+       | 1 example, 1 failure                                                                  |
+       |                                                                                       |
+       | Failure/Error: dbl.foo({bar: "also incorrect"})                                       |
+@@ -156,7 +156,7 @@ Feature: Matching arguments
+       end
+       """
+     When I run `rspec rspec_satisfy_spec.rb`
+-    Then it should fail with the following output:
++    Then it should fail with the following output, ignoring hash syntax:
+       | 2 examples, 1 failure                                         |
+       |                                                               |
+       | Failure/Error: dbl.foo({ :a => { :b => { :c => 3 } } })       |
+diff --git a/features/step_definitions/additional_cli_steps.rb b/features/step_definitions/additional_cli_steps.rb
+index 77f8c0f30..acf1117e0 100644
+--- a/features/step_definitions/additional_cli_steps.rb
++++ b/features/step_definitions/additional_cli_steps.rb
+@@ -22,8 +22,13 @@
+   diffable
+ end
+ 
+-Then /^it should fail with the following output:$/ do |table|
++Then /^it should fail with the following output(, ignoring hash syntax)?:$/ do |ignore_hash_syntax, table|
+   step %q(the exit status should be 1)
+   lines = table.raw.flatten.reject(&:empty?)
++
++  if ignore_hash_syntax && RUBY_VERSION.to_f > 3.3
++    lines = lines.map { |line| line.gsub(/([^\s])=>/, '\1 => ') }
++  end
++
+   expect(all_output).to match_table(lines)
+ end
+diff --git a/spec/rspec/mocks/argument_matchers_spec.rb b/spec/rspec/mocks/argument_matchers_spec.rb
+index eb101a04c..8f31d1786 100644
+--- a/spec/rspec/mocks/argument_matchers_spec.rb
++++ b/spec/rspec/mocks/argument_matchers_spec.rb
+@@ -256,7 +256,7 @@ module Mocks
+           expect(a_double).to receive(:random_call).with(hash_including(:a => 1))
+           expect {
+             a_double.random_call(:a => 2)
+-          }.to fail_including "expected: (hash_including(:a=>1))"
++          }.to fail_including "expected: (hash_including(#{hash_syntax(:a => 1)}))"
+         end
+       end
+ 
+@@ -270,7 +270,7 @@ module Mocks
+           expect(a_double).to receive(:random_call).with(hash_excluding(:a => 1))
+           expect {
+             a_double.random_call(:a => 1)
+-          }.to fail_including "expected: (hash_not_including(:a=>1))"
++          }.to fail_including "expected: (hash_not_including(#{hash_syntax(:a => 1)}))"
+         end
+       end
+ 
+@@ -431,7 +431,7 @@ def ==(other)
+             expect(a_double).to receive(:random_call).with(:a => "a", :b => "b")
+             expect do
+               a_double.random_call(opts)
+-            end.to fail_with(/expected: \(\{(:a=>\"a\", :b=>\"b\"|:b=>\"b\", :a=>\"a\")\}\)/)
++            end.to fail_with(/expected: \(\{(:a\s*=>\s*\"a\", :b\s*=>\s*\"b\"|:b\s*=>\s*\"b\", :a\s*=>\s*\"a\")\}\)/)
+           end
+         else
+           it "matches against a hash submitted as a positional argument and received as keyword arguments in Ruby 2.7 or before" do
+@@ -445,14 +445,14 @@ def ==(other)
+           expect(a_double).to receive(:random_call).with(:a => "b", :c => "d")
+           expect do
+             a_double.random_call(:a => "b", :c => "e")
+-          end.to fail_with(/expected: \(\{(:a=>\"b\", :c=>\"d\"|:c=>\"d\", :a=>\"b\")\}\)/)
++          end.to fail_with(/expected: \(\{(:a\s*=>\s*\"b\", :c\s*=>\s*\"d\"|:c\s*=>\s*\"d\", :a\s*=>\s*\"b\")\}\)/)
+         end
+ 
+         it "fails for a hash w/ wrong keys", :reset => true do
+           expect(a_double).to receive(:random_call).with(:a => "b", :c => "d")
+           expect do
+             a_double.random_call("a" => "b", "c" => "d")
+-          end.to fail_with(/expected: \(\{(:a=>\"b\", :c=>\"d\"|:c=>\"d\", :a=>\"b\")\}\)/)
++          end.to fail_with(/expected: \(\{(:a\s*=>\s*\"b\", :c\s*=>\s*\"d\"|:c\s*=>\s*\"d\", :a\s*=>\s*\"b\")\}\)/)
+         end
+ 
+         it "matches a class against itself" do
+@@ -502,6 +502,10 @@ def ==(other)
+           expect { a_double.msg 3 }.to fail_including "expected: (my_thing)"
+         end
+       end
++
++      def hash_syntax(hash)
++        hash.inspect.gsub(/\{(.*)\}/, '\1')
++      end
+     end
+   end
+ end
+diff --git a/spec/rspec/mocks/diffing_spec.rb b/spec/rspec/mocks/diffing_spec.rb
+index e40fa55b6..8be6510da 100644
+--- a/spec/rspec/mocks/diffing_spec.rb
++++ b/spec/rspec/mocks/diffing_spec.rb
+@@ -100,15 +100,18 @@
+       if RSpec::Support::RubyFeatures.distincts_kw_args_from_positional_hash?
+         eval <<-'RUBY', nil, __FILE__, __LINE__ + 1
+           it "prints a diff when keyword argument were expected but got an option hash (using splat)" do
++            message =
++              "#<Double \"double\"> received :foo with unexpected arguments\n" \
++              "  expected: ({:baz=>:quz, :foo=>:bar}) (keyword arguments)\n" \
++              "       got: ({:baz=>:quz, :foo=>:bar}) (options hash)"
++
++            message = message.gsub('=>', ' => ') if RUBY_VERSION.to_f > 3.3
++
+             with_unfulfilled_double do |d|
+               expect(d).to receive(:foo).with(**expected_hash)
+               expect {
+                 d.foo(expected_hash)
+-              }.to fail_with(
+-                "#<Double \"double\"> received :foo with unexpected arguments\n" \
+-                "  expected: ({:baz=>:quz, :foo=>:bar}) (keyword arguments)\n" \
+-                "       got: ({:baz=>:quz, :foo=>:bar}) (options hash)"
+-              )
++              }.to fail_with(message)
+             end
+           end
+         RUBY
+@@ -117,14 +120,18 @@
+           it "prints a diff when keyword argument were expected but got an option hash (literal)" do
+             with_unfulfilled_double do |d|
+               expect(d).to receive(:foo).with(:positional, keyword: 1)
+-              expect {
+-                options = { keyword: 1 }
+-                d.foo(:positional, options)
+-              }.to fail_with(
++
++              message =
+                 "#<Double \"double\"> received :foo with unexpected arguments\n" \
+                 "  expected: (:positional, {:keyword=>1}) (keyword arguments)\n" \
+                 "       got: (:positional, {:keyword=>1}) (options hash)"
+-              )
++
++              message = message.gsub('=>',' => ') if RUBY_VERSION.to_f > 3.3
++
++              expect {
++                options = { keyword: 1 }
++                d.foo(:positional, options)
++              }.to fail_with(message)
+             end
+           end
+         RUBY
+@@ -139,10 +146,7 @@
+ 
+               expect(d).to receive(:foo).with(expected_input, one: 1)
+ 
+-              expect {
+-                options = { one: 1 }
+-                d.foo(actual_input, options)
+-              }.to fail_with(
++              message =
+                 "#<Double \"double\"> received :foo with unexpected arguments\n" \
+                 "  expected: (#{expected_input.inspect}, {:one=>1}) (keyword arguments)\n" \
+                 "       got: (#{actual_input.inspect}, {:one=>1}) (options hash)\n" \
+@@ -150,7 +154,13 @@
+                 "@@ -1 +1 @@\n" \
+                 "-[#{expected_input.inspect}, {:one=>1}]\n" \
+                 "+[#{actual_input.inspect}, {:one=>1}]\n"
+-              )
++
++              message = message.gsub('=>',' => ') if RUBY_VERSION.to_f > 3.3
++
++              expect {
++                options = { one: 1 }
++                d.foo(actual_input, options)
++              }.to fail_with(message)
+             end
+           end
+         RUBY
+@@ -172,28 +182,34 @@
+       if RSpec::Support::RubyFeatures.distincts_kw_args_from_positional_hash?
+         eval <<-'RUBY', nil, __FILE__, __LINE__ + 1
+           it "prints a diff when keyword argument were expected but got an option hash (using splat)" do
+-            expect(d).to receive(:foo).with(:positional, **expected_hash)
+-            expect {
+-              d.foo(:positional, expected_hash)
+-            }.to fail_with(
++            message =
+               "#{d.inspect} received :foo with unexpected arguments\n" \
+               "  expected: (:positional, {:baz=>:quz, :foo=>:bar}) (keyword arguments)\n" \
+               "       got: (:positional, {:baz=>:quz, :foo=>:bar}) (options hash)"
+-            )
++
++            message.gsub!('=>',' => ') if RUBY_VERSION.to_f > 3.3
++
++            expect(d).to receive(:foo).with(:positional, **expected_hash)
++            expect {
++              d.foo(:positional, expected_hash)
++            }.to fail_with(message)
+           end
+         RUBY
+ 
+         eval <<-'RUBY', nil, __FILE__, __LINE__ + 1
+           it "prints a diff when keyword argument were expected but got an option hash (literal)" do
++            message =
++              "#{d.inspect} received :foo with unexpected arguments\n" \
++              "  expected: (:positional, {:keyword=>1}) (keyword arguments)\n" \
++              "       got: (:positional, {:keyword=>1}) (options hash)"
++
++            message.gsub!('=>',' => ') if RUBY_VERSION.to_f > 3.3
++
+             expect(d).to receive(:foo).with(:positional, keyword: 1)
+             expect {
+               options = { keyword: 1 }
+               d.foo(:positional, options)
+-            }.to fail_with(
+-              "#{d.inspect} received :foo with unexpected arguments\n" \
+-              "  expected: (:positional, {:keyword=>1}) (keyword arguments)\n" \
+-              "       got: (:positional, {:keyword=>1}) (options hash)"
+-            )
++            }.to fail_with(message)
+           end
+         RUBY
+ 
+@@ -206,10 +222,7 @@
+ 
+             expect(d).to receive(:foo).with(expected_input, one: 1)
+ 
+-            expect {
+-              options = { one: 1 }
+-              d.foo(actual_input, options)
+-            }.to fail_with(
++            message =
+               "#{d.inspect} received :foo with unexpected arguments\n" \
+               "  expected: (#{expected_input.inspect}, {:one=>1}) (keyword arguments)\n" \
+               "       got: (#{actual_input.inspect}, {:one=>1}) (options hash)\n" \
+@@ -217,7 +230,13 @@
+               "@@ -1 +1 @@\n" \
+               "-[#{expected_input.inspect}, {:one=>1}]\n" \
+               "+[#{actual_input.inspect}, {:one=>1}]\n"
+-            )
++
++            message = message.gsub('=>', ' => ') if RUBY_VERSION.to_f > 3.3
++
++            expect {
++              options = { one: 1 }
++              d.foo(actual_input, options)
++            }.to fail_with(message)
+           end
+         RUBY
+       end
+@@ -232,6 +251,11 @@
+       def hash_regex_inspect(hash)
+         "\\{(#{hash.map { |key, value| "#{key.inspect}=>#{value.inspect}.*" }.join "|"}){#{hash.size}}\\}"
+       end
++    elsif RUBY_VERSION.to_f > 3.3
++      # Ruby head / 3.4 is changing the hash syntax inspect, but we use PP when diffing which just spaces out hashrockets
++      def hash_regex_inspect(hash)
++        Regexp.escape("{#{hash.map { |key, value| "#{key.inspect} => #{value.inspect}"}.join(", ")}}")
++      end
+     else
+       def hash_regex_inspect(hash)
+         Regexp.escape(hash.inspect)
+diff --git a/spec/rspec/mocks/double_spec.rb b/spec/rspec/mocks/double_spec.rb
+index d5dff63b3..ac65c590f 100644
+--- a/spec/rspec/mocks/double_spec.rb
++++ b/spec/rspec/mocks/double_spec.rb
+@@ -526,10 +526,17 @@ def initialize(amount, units)
+ 
+       if kw_args_supported?
+         it 'fails when calling yielding method with invalid kw args' do
++          message =
++            if RUBY_VERSION.to_f > 3.3
++              '#<Double "test double"> yielded |{:x => 1, :y => 2}| to block with optional keyword args (:x)'
++            else
++              '#<Double "test double"> yielded |{:x=>1, :y=>2}| to block with optional keyword args (:x)'
++            end
++
+           expect(@double).to receive(:yield_back).and_yield(:x => 1, :y => 2)
+           expect {
+             eval("@double.yield_back { |x: 1| }")
+-          }.to fail_with '#<Double "test double"> yielded |{:x=>1, :y=>2}| to block with optional keyword args (:x)'
++          }.to fail_with message
+         end
+       end
+ 
+diff --git a/spec/rspec/mocks/hash_excluding_matcher_spec.rb b/spec/rspec/mocks/hash_excluding_matcher_spec.rb
+index fc0faed05..3fca99823 100644
+--- a/spec/rspec/mocks/hash_excluding_matcher_spec.rb
++++ b/spec/rspec/mocks/hash_excluding_matcher_spec.rb
+@@ -4,7 +4,14 @@ module ArgumentMatchers
+       RSpec.describe HashExcludingMatcher do
+ 
+         it "describes itself properly" do
+-          expect(HashExcludingMatcher.new(:a => 5).description).to eq "hash_not_including(:a=>5)"
++          message =
++            if RUBY_VERSION.to_f > 3.3
++              "hash_not_including(a: 5)"
++            else
++              "hash_not_including(:a=>5)"
++            end
++
++          expect(HashExcludingMatcher.new(:a => 5).description).to eq message
+         end
+ 
+         describe "passing" do
+diff --git a/spec/rspec/mocks/hash_including_matcher_spec.rb b/spec/rspec/mocks/hash_including_matcher_spec.rb
+index ad5e8587a..057aec55d 100644
+--- a/spec/rspec/mocks/hash_including_matcher_spec.rb
++++ b/spec/rspec/mocks/hash_including_matcher_spec.rb
+@@ -4,7 +4,14 @@ module ArgumentMatchers
+       RSpec.describe HashIncludingMatcher do
+ 
+         it "describes itself properly" do
+-          expect(HashIncludingMatcher.new(:a => 1).description).to eq "hash_including(:a=>1)"
++          message =
++            if RUBY_VERSION.to_f > 3.3
++              "hash_including(a: 1)"
++            else
++              "hash_including(:a=>1)"
++            end
++
++          expect(HashIncludingMatcher.new(:a => 1).description).to eq message
+         end
+ 
+         it "describes passed matchers" do
+diff --git a/spec/rspec/mocks/matchers/receive_spec.rb b/spec/rspec/mocks/matchers/receive_spec.rb
+index 1b71dd58f..abf266935 100644
+--- a/spec/rspec/mocks/matchers/receive_spec.rb
++++ b/spec/rspec/mocks/matchers/receive_spec.rb
+@@ -130,7 +130,7 @@ def kw_args_method(a:, b:); end
+               dbl.kw_args_method(a: 1, b: 2)
+             end
+ 
+-            if RUBY_VERSION >= '3.0'
++            if RUBY_VERSION.to_f >= 3.0
+               it "fails to expect to receive hash with keyword args" do
+                 expect {
+                   dbl = instance_double(TestObject)
+@@ -138,9 +138,16 @@ def kw_args_method(a:, b:); end
+                   dbl.kw_args_method({a: 1, b: 2})
+                 }.to fail_with do |failure|
+                   reset_all
+-                  expect(failure.message)
+-                    .to include('expected: ({:a=>1, :b=>2}) (keyword arguments)')
+-                    .and include('got: ({:a=>1, :b=>2}) (options hash)')
++
++                  if RUBY_VERSION.to_f > 3.3
++                    expect(failure.message)
++                      .to include('expected: ({:a => 1, :b => 2}) (keyword arguments)')
++                      .and include('got: ({:a => 1, :b => 2}) (options hash)')
++                  else
++                    expect(failure.message)
++                      .to include('expected: ({:a=>1, :b=>2}) (keyword arguments)')
++                      .and include('got: ({:a=>1, :b=>2}) (options hash)')
++                  end
+                 end
+               end
+             else
+@@ -505,9 +512,14 @@ def receiver.method_missing(*); end # a poor man's stub...
+               receiver.foo(1, :bar => 2)
+               receiver.foo(1, :bar => 3)
+ 
+-              expect { verify_all }.to(
+-                raise_error(/received: 2 times with arguments: \(anything, hash_including\(:bar=>"anything"\)\)$/)
+-              )
++              message =
++                if RUBY_VERSION.to_f > 3.3
++                  /received: 2 times with arguments: \(anything, hash_including\(bar: "anything"\)\)$/
++                else
++                  /received: 2 times with arguments: \(anything, hash_including\(:bar=>"anything"\)\)$/
++                end
++
++              expect { verify_all }.to raise_error(message)
+             end
+           end
+         end
+diff --git a/spec/rspec/mocks/verifying_doubles/expected_arg_verification_spec.rb b/spec/rspec/mocks/verifying_doubles/expected_arg_verification_spec.rb
+index d39995341..1860afa1a 100644
+--- a/spec/rspec/mocks/verifying_doubles/expected_arg_verification_spec.rb
++++ b/spec/rspec/mocks/verifying_doubles/expected_arg_verification_spec.rb
+@@ -130,12 +130,19 @@ module Mocks
+               dbl.kw_args_method(1, :required_arg => 2, :optional_arg => 3)
+             end
+ 
+-            if RUBY_VERSION >= "3"
++            if RUBY_VERSION.to_f >= 3.0
+               it "fails to match against a hash submitted as a positional argument and received as keyword arguments in Ruby 3.0 or later", :reset => true do
++                messages =
++                  if RUBY_VERSION.to_f > 3.3
++                    ["expected: (1, {:optional_arg => 3, :required_arg => 2}) (keyword arguments)", "got: (1, {:optional_arg => 3, :required_arg => 2}) (options hash)"]
++                  else
++                    ["expected: (1, {:optional_arg=>3, :required_arg=>2}) (keyword arguments)", "got: (1, {:optional_arg=>3, :required_arg=>2}) (options hash)"]
++                  end
++
+                 expect(dbl).to receive(:kw_args_method).with(1, :required_arg => 2, :optional_arg => 3)
+                 expect do
+                   dbl.kw_args_method(1, {:required_arg => 2, :optional_arg => 3})
+-                end.to fail_with(a_string_including("expected: (1, {:optional_arg=>3, :required_arg=>2}) (keyword arguments)", "got: (1, {:optional_arg=>3, :required_arg=>2}) (options hash)"))
++                end.to fail_with(a_string_including(*messages))
+               end
+             else
+               it "matches against a hash submitted as a positional argument and received as keyword arguments in Ruby 2.7 or before" do

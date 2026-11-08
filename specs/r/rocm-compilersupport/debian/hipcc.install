@@ -1,0 +1,10 @@
+/usr/bin/hipcc
+/usr/bin/hipcc.bin
+/usr/bin/hipcc.pl
+/usr/bin/hipvars.pm
+/usr/bin/hipconfig
+/usr/bin/hipconfig.bin
+/usr/bin/hipconfig.pl
+/usr/share/doc/hipcc
+/usr/share/doc/hipcc/LICENSE.txt
+/usr/share/doc/hipcc/README.md

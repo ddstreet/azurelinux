@@ -1,0 +1,60 @@
+Backuport of upstream r64941: stdlib.h to placate clang16
+
+2022-11-05  Sam James  <sam@gentoo.org>
+
+	* configure.ac (Ghostscript version): #include <stdlib.h>
+	to declare exit and placate clang16.
+	https://tug.org/pipermail/tlbuild/2022q4/005269.html
+
+Index: Build/source/texk/dvisvgm/configure
+===================================================================
+--- Build/source/texk/dvisvgm/configure	(revision 64940)
++++ Build/source/texk/dvisvgm/configure	(revision 64941)
+@@ -23415,6 +23415,7 @@
+   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+ #include <stdio.h>
++		#include <stdlib.h>
+ 		#include <ghostscript/iapi.h>
+ 		int main () {
+ 			gsapi_revision_t r;
+Index: Build/source/texk/dvisvgm/configure.ac
+===================================================================
+--- Build/source/texk/dvisvgm/configure.ac	(revision 64940)
++++ Build/source/texk/dvisvgm/configure.ac	(revision 64941)
+@@ -94,6 +94,7 @@
+ 	# query Ghostscript version
+ 	AC_MSG_CHECKING([Ghostscript version])
+ 	AC_RUN_IFELSE([AC_LANG_SOURCE([#include <stdio.h>
++		#include <stdlib.h>
+ 		#include <ghostscript/iapi.h>
+ 		int main () {
+ 			gsapi_revision_t r;
+Index: Build/source/texk/kpathsea/configure
+===================================================================
+--- Build/source/texk/kpathsea/configure	(revision 64940)
++++ Build/source/texk/kpathsea/configure	(revision 64941)
+@@ -14633,7 +14633,8 @@
+ else $as_nop
+   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+-int fork() { exit(1); }
++#include <stdlib.h>
++                                                 int fork() { exit(1); }
+                                                  int vfork() { exit(1); }
+                                                  extern char *getcwd();
+                                                  char path[100];
+Index: Build/source/texk/kpathsea/configure.ac
+===================================================================
+--- Build/source/texk/kpathsea/configure.ac	(revision 64940)
++++ Build/source/texk/kpathsea/configure.ac	(revision 64941)
+@@ -45,7 +45,8 @@
+ # We only need to run this if we have getcwd.
+ AC_CACHE_CHECK([whether getcwd uses fork or vfork],
+                [kb_cv_func_getcwd_forks],
+-               [AC_RUN_IFELSE([AC_LANG_PROGRAM([[int fork() { exit(1); }
++               [AC_RUN_IFELSE([AC_LANG_PROGRAM([[#include <stdlib.h>
++                                                 int fork() { exit(1); }
+                                                  int vfork() { exit(1); }
+                                                  extern char *getcwd();
+                                                  char path[100];]],

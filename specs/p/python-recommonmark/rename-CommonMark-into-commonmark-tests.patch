@@ -1,0 +1,22 @@
+From a38bac33b784b741d3bdd0e4bacdc98d158c3bc9 Mon Sep 17 00:00:00 2001
+From: Vasyl Fesik <vasyl.fesik@verygoodsecurity.com>
+Date: Mon, 17 Sep 2018 16:16:57 +0300
+Subject: [PATCH] rename `CommonMark` to `commonmark` in tests
+
+---
+ tests/test_basic.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/test_basic.py b/tests/test_basic.py
+index f953afd..8fa0142 100644
+--- a/tests/test_basic.py
++++ b/tests/test_basic.py
+@@ -8,7 +8,7 @@
+ from docutils.readers import Reader
+ from docutils.core import publish_parts
+ 
+-from CommonMark import Parser
++from commonmark import Parser
+ from recommonmark.parser import CommonMarkParser
+ 
+ 

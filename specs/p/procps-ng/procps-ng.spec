@@ -7,7 +7,7 @@
 Summary: System and process monitoring utilities
 Name: procps-ng
 Version: 4.0.4
-Release: 7%{?dist}.1
+Release: 8%{?dist}.1
 License: GPL-2.0-or-later AND LGPL-2.0-or-later AND LGPL-2.1-or-later
 URL: https://sourceforge.net/projects/procps-ng/
 
@@ -162,6 +162,9 @@ ln -s %{_bindir}/pidof %{buildroot}%{_sbindir}/pidof
 %files i18n -f %{name}.lang
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 4.0.4-8.1
+- Render component as lockless
+
 * Fri Oct 03 2025 Jan Rybar <jrybar@redhat.com> - 4.0.4-7.1
 - conflict of 'kill' i18n manpage with util-linux-i18n
 - Resolves: bz#2393949

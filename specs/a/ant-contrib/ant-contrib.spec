@@ -6,7 +6,7 @@
 Summary:        Collection of tasks for Ant
 Name:           ant-contrib
 Version:        1.0
-Release:        0.49.%{beta_number}%{?dist}
+Release:        0.50.%{beta_number}%{?dist}
 # Project site on sf lists both Apache Software License, Apache License V2.0
 # see: https://sourceforge.net/projects/ant-contrib/
 License:        Apache-2.0 AND Apache-1.1
@@ -93,6 +93,9 @@ echo "ant-contrib/ant-contrib" > $RPM_BUILD_ROOT%{_sysconfdir}/ant.d/ant-contrib
 %license target/docs/LICENSE.txt LICENSE-2.0.txt
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.0-0.50.b3
+- Render component as lockless
+
 * Mon Jul 28 2025 jiri vanek <jvanek@redhat.com> - 1.0-0.49.b3
 - Rebuilt for java-25-openjdk as preffered jdk
 

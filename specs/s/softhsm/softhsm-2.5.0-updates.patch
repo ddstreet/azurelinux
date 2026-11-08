@@ -1,0 +1,1936 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index bc47f26..056f2a4 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -14,7 +14,6 @@ option(ENABLE_FIPS "Enable support for FIPS 140-2 mode" OFF)
+ option(ENABLE_P11_KIT "Enable p11-kit integration" ON)
+ option(ENABLE_PEDANTIC "Enable pedantic compile mode" OFF)
+ option(ENABLE_STRICT "Enable strict compile mode" ON)
+-option(ENABLE_SHARED "Build shared libraries" ON)
+ option(ENABLE_STATIC "Build static libraries" ON)
+ option(WITH_OBJECTSTORE_BACKEND_DB "Build with object store backend database (SQLite3)" OFF)
+ option(WITH_MIGRATE "Build migration tool. Requires SQLite3." OFF)
+diff --git a/NEWS b/NEWS
+index bc32026..aba6aaf 100644
+--- a/NEWS
++++ b/NEWS
+@@ -1,5 +1,25 @@
+ NEWS for SoftHSM -- History of user visible changes
+ 
++SoftHSM develop
++
++* Issue #438: Detect crypto algorithms by default.
++  (Patch from Alon Bar-Lev)
++
++Bugfixes:
++* Issue #418: Set fields to NULL to avoid double free.
++  (Patch from Brian J Murray)
++* Issue #423: ENGINE_load_rdrand is not supported with older openssl.
++  (Patch from Alon Bar-Lev)
++* Issue #429: Updated prerequisite to build from repository.
++  (Patch from Dharmesh Khandelwal)
++* Issue #434: Fix build issues with CMake.
++  (Patch from Peter Wu)
++* Issue #435: Fix botan build without EDDSA.
++  (Patch from Peter Wu)
++* Issue #442: Release resources from OSSLEVPSymmetricAlgorithm.
++  (Patch from Petr Menšík)
++
++
+ SoftHSM 2.5.0 - 2018-09-24
+ 
+ * Issue #323: Support for EDDSA with vendor defined mechanisms.
+diff --git a/README.md b/README.md
+index 769bf9c..d1c97a4 100644
+--- a/README.md
++++ b/README.md
+@@ -59,11 +59,18 @@ The unit tests requires CppUnit.
+ 
+ ## Installation
+ 
++### Building from the repository
++
++If the code is downloaded directly from the code repository, you have to
++prepare the configuration scripts before continuing.
++
++1. You need to install automake, autoconf, libtool, libtool-ltdl-devel (RHEL/CentOS), pkg-config.
++2. Run the command 'sh autogen.sh'
++
+ ### Configure
+ 
+ Configure the installation/compilation scripts:
+ 
+-	sh ./autogen.sh
+ 	./configure
+ 
+ Options:
+@@ -71,9 +78,9 @@ Options:
+ 	--disable-non-paged-memory
+ 				Disable non-paged memory for secure storage
+ 				(default enabled)
+-	--disable-ecc		Disable support for ECC (default enabled)
+-	--disable-eddsa		Disable support for EDDSA (default enabled)
+-	--disable-gost		Disable support for GOST (default enabled)
++	--enable-ecc		Enable support for ECC (default detect)
++	--enable-gost		Enable support for GOST (default detect)
++	--enable-eddsa		Enable support for EDDSA (default detect)
+ 	--disable-visibility	Disable hidden visibilty link mode [enabled]
+ 	--with-crypto-backend	Select crypto backend (openssl|botan)
+ 	--with-openssl=PATH	Specify prefix of path of OpenSSL
+@@ -154,13 +161,3 @@ softhsm2.conf. Backup can thus be done as a regular file copy.
+ Log information is sent to syslog or the Windows event log and the log
+ level is set in the configuration file. Each log event is prepended with
+ the source file name and line number.
+-
+-
+-## Building from the repository
+-
+-If the code is downloaded directly from the code repository, you have to
+-prepare the configuration scripts before continuing with the real README.
+-
+-1. You need to install automake, autoconf, libtool, pkg-config.
+-2. Run the command 'sh autogen.sh'
+-3. Continue reading this README.
+diff --git a/configure.ac b/configure.ac
+index 99bba8f..fe23ed8 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -8,7 +8,7 @@
+ 
+ define([SOFTHSM_VERSION_MAJOR], [2])
+ define([SOFTHSM_VERSION_MINOR], [5])
+-define([SOFTHSM_VERSION_FIX], [0])
++define([SOFTHSM_VERSION_FIX], [1])
+ define([PACKAGE_SUFFIX], [])
+ 
+ # Library version
+@@ -215,6 +215,7 @@ AC_CONFIG_FILES([
+ 	src/lib/test/Makefile
+ 	src/lib/test/softhsm2.conf
+ 	src/lib/test/softhsm2-alt.conf
++	src/lib/test/softhsm2-mech.conf
+ 	src/lib/test/tokens/dummy
+ 	src/bin/Makefile
+ 	src/bin/common/Makefile
+diff --git a/m4/acx_botan_ecc.m4 b/m4/acx_botan_ecc.m4
+index 1dd067e..a45e0fe 100644
+--- a/m4/acx_botan_ecc.m4
++++ b/m4/acx_botan_ecc.m4
+@@ -41,11 +41,7 @@ AC_DEFUN([ACX_BOTAN_ECC],[
+ 			acx_cv_lib_botan_ecc_support=yes
+ 		],[
+ 			AC_MSG_RESULT([Cannot find P256])
+-			AC_MSG_ERROR([
+-Botan library has no valid ECC support. Please upgrade to a later version
+-of Botan, above or including version 1.10.6 or 1.11.5.
+-Alternatively disable ECC support in SoftHSM with --disable-ecc
+-])
++			acx_cv_lib_botan_ecc_support=no
+ 		],[
+ 			AC_MSG_WARN([Cannot test, assuming P256])
+ 			acx_cv_lib_botan_ecc_support=yes
+@@ -55,4 +51,5 @@ Alternatively disable ECC support in SoftHSM with --disable-ecc
+ 
+ 	CPPFLAGS=$tmp_CPPFLAGS
+ 	LIBS=$tmp_LIBS
++	have_lib_botan_ecc_support="${acx_cv_lib_botan_ecc_support}"
+ ])
+diff --git a/m4/acx_botan_eddsa.m4 b/m4/acx_botan_eddsa.m4
+index 88090b7..20dd92c 100644
+--- a/m4/acx_botan_eddsa.m4
++++ b/m4/acx_botan_eddsa.m4
+@@ -32,11 +32,7 @@ AC_DEFUN([ACX_BOTAN_EDDSA],[
+ 			acx_cv_lib_botan_eddsa_support=yes
+ 		],[
+ 			AC_MSG_RESULT([Cannot find Ed25519])
+-			AC_MSG_ERROR([
+-Botan library has no valid EDDSA support. Please upgrade to a later version
+-of Botan with EDDSA support.
+-Alternatively disable EDDSA support in SoftHSM with --disable-eddsa
+-])
++			acx_cv_lib_botan_eddsa_support=no
+ 		],[
+ 			AC_MSG_WARN([Cannot test, assuming EDDSA])
+ 			acx_cv_lib_botan_eddsa_support=yes
+@@ -46,4 +42,5 @@ Alternatively disable EDDSA support in SoftHSM with --disable-eddsa
+ 
+ 	CPPFLAGS=$tmp_CPPFLAGS
+ 	LIBS=$tmp_LIBS
++	have_lib_botan_eddsa_support="${acx_cv_lib_botan_eddsa_support}"
+ ])
+diff --git a/m4/acx_botan_gost.m4 b/m4/acx_botan_gost.m4
+index ba4c334..e509902 100644
+--- a/m4/acx_botan_gost.m4
++++ b/m4/acx_botan_gost.m4
+@@ -42,11 +42,7 @@ AC_DEFUN([ACX_BOTAN_GOST],[
+ 			acx_cv_lib_botan_gost_support=yes
+ 		],[
+ 			AC_MSG_RESULT([Cannot find GOST])
+-			AC_MSG_ERROR([
+-Botan library has no valid GOST support. Please upgrade to a later version
+-of Botan, above or including version 1.10.6 or 1.11.5.
+-Alternatively disable GOST support in SoftHSM with --disable-gost
+-])
++			acx_cv_lib_botan_gost_support=no
+ 		],[
+ 			AC_MSG_WARN([Cannot test, assuming GOST])
+ 			acx_cv_lib_botan_gost_support=yes
+@@ -56,4 +52,5 @@ Alternatively disable GOST support in SoftHSM with --disable-gost
+ 
+ 	CPPFLAGS=$tmp_CPPFLAGS
+ 	LIBS=$tmp_LIBS
++	have_lib_botan_gost_support="${acx_cv_lib_botan_gost_support}"
+ ])
+diff --git a/m4/acx_crypto_backend.m4 b/m4/acx_crypto_backend.m4
+index f815bcd..5e00098 100644
+--- a/m4/acx_crypto_backend.m4
++++ b/m4/acx_crypto_backend.m4
+@@ -4,65 +4,29 @@ AC_DEFUN([ACX_CRYPTO_BACKEND],[
+ 
+ 	AC_ARG_ENABLE(ecc,
+ 		AC_HELP_STRING([--enable-ecc],
+-			[Enable support for ECC (default enabled)]
++			[Enable support for ECC (default detect)]
+ 		),
+ 		[enable_ecc="${enableval}"],
+-		[enable_ecc="yes"]
++		[enable_ecc="detect"]
+ 	)
+-	AC_MSG_CHECKING(for ECC support)
+-	if test "x${enable_ecc}" = "xyes"; then
+-		AC_MSG_RESULT(yes)
+-		AC_DEFINE_UNQUOTED(
+-			[WITH_ECC],
+-			[],
+-			[Compile with ECC support]
+-		)
+-	else
+-		AC_MSG_RESULT(no)
+-	fi
+-	AM_CONDITIONAL([WITH_ECC], [test "x${enable_ecc}" = "xyes"])
+ 
+ 	AC_ARG_ENABLE(gost,
+ 		AC_HELP_STRING([--enable-gost],
+-			[Enable support for GOST (default enabled)]
++			[Enable support for GOST (default detect)]
+ 		),
+ 		[enable_gost="${enableval}"],
+-		[enable_gost="yes"]
++		[enable_gost="detect"]
+ 	)
+-	AC_MSG_CHECKING(for GOST support)
+-	if test "x${enable_gost}" = "xyes"; then
+-		AC_MSG_RESULT(yes)
+-		AC_DEFINE_UNQUOTED(
+-			[WITH_GOST],
+-			[],
+-			[Compile with GOST support]
+-		)
+-	else
+-		AC_MSG_RESULT(no)
+-	fi
+-	AM_CONDITIONAL([WITH_GOST], [test "x${enable_gost}" = "xyes"])
+ 
+ 	# Add Eddsa check
+ 
+ 	AC_ARG_ENABLE(eddsa,
+ 		AC_HELP_STRING([--enable-eddsa],
+-			[Enable support for EDDSA (default disabled)]
++			[Enable support for EDDSA (default detect)]
+ 		),
+ 		[enable_eddsa="${enableval}"],
+-		[enable_eddsa="no"]
++		[enable_eddsa="detect"]
+ 	)
+-	AC_MSG_CHECKING(for EDDSA support)
+-	if test "x${enable_eddsa}" = "xyes"; then
+-		AC_MSG_RESULT(yes)
+-		AC_DEFINE_UNQUOTED(
+-			[WITH_EDDSA],
+-			[],
+-			[Compile with EDDSA support]
+-		)
+-	else
+-		AC_MSG_RESULT(no)
+-	fi
+-	AM_CONDITIONAL([WITH_EDDSA], [test "x${enable_eddsa}" = "xyes"])
+ 
+ 	# Second check for the FIPS 140-2 mode
+ 
+@@ -84,7 +48,6 @@ AC_DEFUN([ACX_CRYPTO_BACKEND],[
+ 	else
+ 		AC_MSG_RESULT(no)
+ 	fi
+-	AM_CONDITIONAL([WITH_GOST], [test "x${enable_fips}" = "xyes"])
+ 
+ 	# Then check what crypto library we want to use
+ 
+@@ -110,20 +73,31 @@ AC_DEFUN([ACX_CRYPTO_BACKEND],[
+ 		CRYPTO_INCLUDES=$OPENSSL_INCLUDES
+ 		CRYPTO_LIBS=$OPENSSL_LIBS
+ 
+-		if test "x${enable_ecc}" = "xyes"; then
+-			ACX_OPENSSL_ECC
+-		fi
+-
+-		if test "x${enable_eddsa}" = "xyes"; then
+-			ACX_OPENSSL_EDDSA
+-		fi
+-
+-		if test "x${enable_gost}" = "xyes"; then
+-			if test "x${enable_fips}" = "xyes"; then
+-				AC_MSG_ERROR([GOST is not FIPS approved])
+-			fi
+-			ACX_OPENSSL_GOST
+-		fi
++		case "${enable_ecc}" in
++			yes|detect) ACX_OPENSSL_ECC;;
++		esac
++		case "${enable_ecc}-${have_lib_openssl_ecc_support}" in
++			yes-no) AC_MSG_ERROR([OpenSSL library has no ECC support]);;
++			detect-*) enable_ecc="${have_lib_openssl_ecc_support}";;
++		esac
++
++		case "${enable_eddsa}" in
++			yes|detect) ACX_OPENSSL_EDDSA;;
++		esac
++		case "${enable_eddsa}-${have_lib_openssl_ed25519_support}-${have_lib_openssl_ed448_support}" in
++			yes*-no*) AC_MSG_ERROR([OpenSSL library has no EDDSA support]);;
++			detect-yes-yes) enable_eddsa="yes";;
++			detect*-no*) enable_eddsa="no";;
++		esac
++
++		case "${enable_gost}-${enable_fips}" in
++			yes-yes) AC_MSG_ERROR([GOST is not FIPS approved]);;
++			yes-no|detect-no) ACX_OPENSSL_GOST;;
++		esac
++		case "${enable_gost}-${have_lib_openssl_gost_support}" in
++			yes-no) AC_MSG_ERROR([OpenSSL library has no GOST support]);;
++			detect-*) enable_gost="${have_lib_openssl_gost_support}";;
++		esac
+ 
+ 		if test "x${enable_fips}" = "xyes"; then
+ 			ACX_OPENSSL_FIPS
+@@ -155,22 +129,34 @@ AC_DEFUN([ACX_CRYPTO_BACKEND],[
+ 		CRYPTO_INCLUDES=$BOTAN_CFLAGS
+ 		CRYPTO_LIBS=$BOTAN_LIBS
+ 
+-		if test "x${enable_ecc}" = "xyes"; then
+-			ACX_BOTAN_ECC
+-		fi
+-
+-		if test "x${enable_eddsa}" = "xyes"; then
+-			ACX_BOTAN_EDDSA
+-		fi
++		case "${enable_ecc}" in
++			yes|detect) ACX_BOTAN_ECC;;
++		esac
++		case "${enable_ecc}-${have_lib_botan_ecc_support}" in
++			yes-no) AC_MSG_ERROR([Botan library has no ECC support]);;
++			detect-*) enable_ecc="${have_lib_botan_ecc_support}";;
++		esac
++
++		case "${enable_eddsa}" in
++			yes|detect) ACX_BOTAN_EDDSA;;
++		esac
++		case "${enable_eddsa}-${have_lib_botan_eddsa_support}" in
++			yes-no) AC_MSG_ERROR([Botan library has no EDDSA support]);;
++			detect-*) enable_eddsa="${have_lib_botan_eddsa_support}";;
++		esac
++
++		case "${enable_gost}" in
++			yes|detect) ACX_BOTAN_GOST;;
++		esac
++		case "${enable_gost}-${have_lib_botan_gost_support}" in
++			yes-no) AC_MSG_ERROR([Botan library has no GOST support]);;
++			detect-*) enable_gost="${have_lib_botan_gost_support}";;
++		esac
+ 
+ 		if test	"x${enable_fips}" = "xyes"; then
+ 			AC_MSG_ERROR([Botan does not support FIPS 140-2 mode])
+ 		fi
+ 
+-		if test "x${enable_gost}" = "xyes"; then
+-			ACX_BOTAN_GOST
+-		fi
+-
+ 		if test "x${BOTAN_VERSION_MAJOR}" = "x1" -a "x${BOTAN_VERSION_MINOR}" = "x10"; then
+ 			ACX_BOTAN_GNUMP
+ 		fi
+@@ -190,6 +176,46 @@ AC_DEFUN([ACX_CRYPTO_BACKEND],[
+ 		AC_MSG_ERROR([Crypto backend ${crypto_backend} not supported. Use openssl or botan.])
+ 	fi
+ 
++	AC_MSG_CHECKING(for ECC support)
++	if test "x${enable_ecc}" = "xyes"; then
++		AC_MSG_RESULT(yes)
++		AC_DEFINE_UNQUOTED(
++			[WITH_ECC],
++			[],
++			[Compile with ECC support]
++		)
++	else
++		AC_MSG_RESULT(no)
++	fi
++	AM_CONDITIONAL([WITH_ECC], [test "x${enable_ecc}" = "xyes"])
++
++	AC_MSG_CHECKING(for GOST support)
++	if test "x${enable_gost}" = "xyes"; then
++		AC_MSG_RESULT(yes)
++		AC_DEFINE_UNQUOTED(
++			[WITH_GOST],
++			[],
++			[Compile with GOST support]
++		)
++	else
++		AC_MSG_RESULT(no)
++	fi
++	AM_CONDITIONAL([WITH_GOST], [test "x${enable_gost}" = "xyes"])
++
++	AC_MSG_CHECKING(for EDDSA support)
++	if test "x${enable_eddsa}" = "xyes"; then
++		AC_MSG_RESULT(yes)
++		AC_DEFINE_UNQUOTED(
++			[WITH_EDDSA],
++			[],
++			[Compile with EDDSA support]
++		)
++	else
++		AC_MSG_RESULT(no)
++	fi
++	AM_CONDITIONAL([WITH_EDDSA], [test "x${enable_eddsa}" = "xyes"])
++
++
+ 	AC_SUBST(CRYPTO_INCLUDES)
+ 	AC_SUBST(CRYPTO_LIBS)
+ 	AM_CONDITIONAL([WITH_OPENSSL], [test "x${crypto_backend}" = "xopenssl"])
+diff --git a/m4/acx_openssl_ecc.m4 b/m4/acx_openssl_ecc.m4
+index 3ecf7a9..84ab521 100644
+--- a/m4/acx_openssl_ecc.m4
++++ b/m4/acx_openssl_ecc.m4
+@@ -31,7 +31,7 @@ AC_DEFUN([ACX_OPENSSL_ECC],[
+ 			acx_cv_lib_openssl_ecc_support=yes
+ 		],[
+ 			AC_MSG_RESULT([Cannot find P256, P384, or P521])
+-			AC_MSG_ERROR([OpenSSL library has no ECC support])
++			acx_cv_lib_openssl_ecc_support=no
+ 		],[
+ 			AC_MSG_WARN([Cannot test, assuming P256, P384, and P521])
+ 			acx_cv_lib_openssl_ecc_support=yes
+@@ -41,4 +41,5 @@ AC_DEFUN([ACX_OPENSSL_ECC],[
+ 
+ 	CPPFLAGS=$tmp_CPPFLAGS
+ 	LIBS=$tmp_LIBS
++	have_lib_openssl_ecc_support="${acx_cv_lib_openssl_ecc_support}"
+ ])
+diff --git a/m4/acx_openssl_eddsa.m4 b/m4/acx_openssl_eddsa.m4
+index 0b629e2..07fbccd 100644
+--- a/m4/acx_openssl_eddsa.m4
++++ b/m4/acx_openssl_eddsa.m4
+@@ -1,5 +1,5 @@
+ AC_DEFUN([ACX_OPENSSL_EDDSA],[
+-	AC_MSG_CHECKING(for OpenSSL EDDSA support)
++	AC_MSG_CHECKING(for OpenSSL EDDSA ED25519 support)
+ 
+ 	tmp_CPPFLAGS=$CPPFLAGS
+ 	tmp_LIBS=$LIBS
+@@ -29,12 +29,14 @@ AC_DEFUN([ACX_OPENSSL_EDDSA],[
+ 			acx_cv_lib_openssl_ed25519_support=yes
+ 		],[
+ 			AC_MSG_RESULT([Cannot find ED25519])
+-			AC_MSG_ERROR([OpenSSL library has no EDDSA support])
++			acx_cv_lib_openssl_ed25519_support=no
+ 		],[
+ 			AC_MSG_WARN([Cannot test, ED25519])
+ 			acx_cv_lib_openssl_ed25519_support=yes
+ 		])
+ 	])
++
++	AC_MSG_CHECKING(for OpenSSL EDDSA ED448 support)
+ 	AC_CACHE_VAL([acx_cv_lib_openssl_ed448_support],[
+ 		acx_cv_lib_openssl_ed448_support=no
+ 		AC_RUN_IFELSE([
+@@ -56,6 +58,7 @@ AC_DEFUN([ACX_OPENSSL_EDDSA],[
+ 			acx_cv_lib_openssl_ed448_support=yes
+ 		],[
+ 			AC_MSG_RESULT([Cannot find ED448])
++			acx_cv_lib_openssl_ed448_support=no
+ 		],[
+ 			AC_MSG_WARN([Cannot test, ED448])
+ 			acx_cv_lib_openssl_ed448_support=yes
+@@ -65,4 +68,6 @@ AC_DEFUN([ACX_OPENSSL_EDDSA],[
+ 
+ 	CPPFLAGS=$tmp_CPPFLAGS
+ 	LIBS=$tmp_LIBS
++	have_lib_openssl_ed25519_support="${acx_cv_lib_openssl_ed25519_support}"
++	have_lib_openssl_ed448_support="${acx_cv_lib_openssl_ed448_support}"
+ ])
+diff --git a/m4/acx_openssl_gost.m4 b/m4/acx_openssl_gost.m4
+index 7deaacb..7cf6000 100644
+--- a/m4/acx_openssl_gost.m4
++++ b/m4/acx_openssl_gost.m4
+@@ -59,7 +59,7 @@ AC_DEFUN([ACX_OPENSSL_GOST],[
+ 			acx_cv_lib_openssl_gost_support=yes
+ 		],[
+ 			AC_MSG_RESULT([Cannot find GOST engine])
+-			AC_MSG_ERROR([OpenSSL library has no GOST support])
++			acx_cv_lib_openssl_gost_support=no
+ 		],[
+ 			AC_MSG_WARN([Cannot test, assuming GOST engine])
+ 			acx_cv_lib_openssl_gost_support=yes
+@@ -69,4 +69,5 @@ AC_DEFUN([ACX_OPENSSL_GOST],[
+ 
+ 	CPPFLAGS=$tmp_CPPFLAGS
+ 	LIBS=$tmp_LIBS
++	have_lib_openssl_gost_support="${acx_cv_lib_openssl_gost_support}"
+ ])
+diff --git a/modules/CompilerOptions.cmake b/modules/CompilerOptions.cmake
+index 2eab806..29a0ae5 100644
+--- a/modules/CompilerOptions.cmake
++++ b/modules/CompilerOptions.cmake
+@@ -32,9 +32,7 @@ if(ENABLE_STRICT)
+     set(CMAKE_CXX_EXTENSIONS OFF)
+ endif(ENABLE_STRICT)
+ 
+-if(ENABLE_SHARED)
+-    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+-endif(ENABLE_SHARED)
++set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+ 
+ # Compiler Options/Macros
+ 
+diff --git a/src/lib/CMakeLists.txt b/src/lib/CMakeLists.txt
+index fb03c2a..895bb98 100644
+--- a/src/lib/CMakeLists.txt
++++ b/src/lib/CMakeLists.txt
+@@ -32,30 +32,34 @@ set(SOURCES access.cpp
+             SoftHSM.cpp
+             )
+ 
+-set(DEPENDENCIES softhsm_common-obj
+-                 softhsm_crypto-obj
+-                 softhsm_datamgr-obj
+-                 softhsm_handlemgr-obj
+-                 softhsm_objectstore-obj
+-                 softhsm_sessionmgr-obj
+-                 softhsm_slotmgr-obj
++set(STATIC_FILES softhsm_common
++                 softhsm_crypto
++                 softhsm_datamgr
++                 softhsm_handlemgr
++                 softhsm_objectstore
++                 softhsm_sessionmgr
++                 softhsm_slotmgr
+                  )
+ 
+-set(OBJECT_FILES $<TARGET_OBJECTS:softhsm_common-obj>
+-                 $<TARGET_OBJECTS:softhsm_crypto-obj>
+-                 $<TARGET_OBJECTS:softhsm_datamgr-obj>
+-                 $<TARGET_OBJECTS:softhsm_handlemgr-obj>
+-                 $<TARGET_OBJECTS:softhsm_objectstore-obj>
+-                 $<TARGET_OBJECTS:softhsm_sessionmgr-obj>
+-                 $<TARGET_OBJECTS:softhsm_slotmgr-obj>
+-                 )
++if(CMAKE_VERSION VERSION_LESS "3.12")
++        # Older CMake versions cannot link object libraries to a target, so pass
++        # the associated object files as source. Similarly, softhsm_crypto and
++        # softhsm_objectstore object library dependencies cannot be propagated
++        # so as a workaround explicitly specify it here.
++        foreach(libname IN LISTS STATIC_FILES)
++                list(APPEND SOURCES $<TARGET_OBJECTS:${libname}>)
++        endforeach()
++        # Older CMake versions forbid library dependencies on object libraries,
++        # therefore repeat softhsm_crypto and softhsm_objectstore dependencies.
++        set(STATIC_FILES ${CRYPTO_LIBS} ${SQLITE3_LIBS})
++endif()
+ 
+ 
+ ###############################################################################
+ # Static Library Config
+ ###############################################################################
+-add_library(${PROJECT_NAME}-static STATIC ${SOURCES} ${OBJECT_FILES})
+-add_dependencies(${PROJECT_NAME}-static ${DEPENDENCIES})
++add_library(${PROJECT_NAME}-static STATIC ${SOURCES})
++target_link_libraries(${PROJECT_NAME}-static ${STATIC_FILES})
+ set_target_properties(${PROJECT_NAME}-static
+                       PROPERTIES OUTPUT_NAME ${PROJECT_NAME}
+                       )
+@@ -64,8 +68,8 @@ generate_export_header(${PROJECT_NAME}-static)
+ ###############################################################################
+ # Shared Library Config
+ ###############################################################################
+-add_library(${PROJECT_NAME} SHARED ${SOURCES} ${OBJECT_FILES})
+-add_dependencies(${PROJECT_NAME} ${DEPENDENCIES})
++add_library(${PROJECT_NAME} SHARED ${SOURCES})
++target_link_libraries(${PROJECT_NAME} ${STATIC_FILES})
+ generate_export_header(${PROJECT_NAME})
+ 
+ ###############################################################################
+@@ -78,6 +82,11 @@ endif(BUILD_TESTS)
+ ###############################################################################
+ # Install
+ ###############################################################################
+-install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}-static
++install(TARGETS ${PROJECT_NAME}
+         DESTINATION ${CMAKE_INSTALL_LIBDIR}/softhsm
+         )
++if(ENABLE_STATIC)
++        install(TARGETS ${PROJECT_NAME}-static
++                DESTINATION ${CMAKE_INSTALL_LIBDIR}/softhsm
++                )
++endif()
+diff --git a/src/lib/P11Attributes.cpp b/src/lib/P11Attributes.cpp
+index 02b71d7..bfcf445 100644
+--- a/src/lib/P11Attributes.cpp
++++ b/src/lib/P11Attributes.cpp
+@@ -340,8 +340,10 @@ CK_RV P11Attribute::retrieve(Token *token, bool isPrivate, CK_VOID_PTR pValue, C
+ 					ERROR_MSG("Internal error: failed to decrypt private attribute value");
+ 					return CKR_GENERAL_ERROR;
+ 				}
+-				const unsigned char* attrPtr = value.const_byte_str();
+-				memcpy(pValue,attrPtr,attrSize);
++				if (value.size() !=  0) {
++					const unsigned char* attrPtr = value.const_byte_str();
++					memcpy(pValue,attrPtr,attrSize);
++				}
+ 			}
+ 			else if (attr.getByteStringValue().size() != 0)
+ 			{
+@@ -356,7 +358,7 @@ CK_RV P11Attribute::retrieve(Token *token, bool isPrivate, CK_VOID_PTR pValue, C
+ 
+ 			std::set<CK_MECHANISM_TYPE> set = attr.getMechanismTypeSetValue();
+ 			for (std::set<CK_MECHANISM_TYPE>::const_iterator it = set.begin(); it != set.end(); ++it)
+-				pTemplate[++i] = *it;
++				pTemplate[i++] = *it;
+ 		}
+ 		else
+ 		{
+diff --git a/src/lib/SoftHSM.cpp b/src/lib/SoftHSM.cpp
+index f0c4f39..a987bc6 100644
+--- a/src/lib/SoftHSM.cpp
++++ b/src/lib/SoftHSM.cpp
+@@ -77,6 +77,7 @@
+ #endif
+ 
+ #include <stdlib.h>
++#include <algorithm>
+ 
+ // Initialise the one-and-only instance
+ 
+@@ -365,13 +366,24 @@ SoftHSM::SoftHSM()
+ SoftHSM::~SoftHSM()
+ {
+ 	if (handleManager != NULL) delete handleManager;
++	handleManager = NULL;
+ 	if (sessionManager != NULL) delete sessionManager;
++	sessionManager = NULL;
+ 	if (slotManager != NULL) delete slotManager;
++	slotManager = NULL;
+ 	if (objectStore != NULL) delete objectStore;
++	objectStore = NULL;
+ 	if (sessionObjectStore != NULL) delete sessionObjectStore;
++	sessionObjectStore = NULL;
++
+ 	resetMutexFactoryCallbacks();
+ }
+ 
++// A list with the supported mechanisms
++std::map<std::string, CK_MECHANISM_TYPE> mechanisms_table;
++std::list<CK_MECHANISM_TYPE> supportedMechanisms;
++CK_ULONG nrSupportedMechanisms;
++
+ /*****************************************************************************
+  Implementation of PKCS #11 functions
+  *****************************************************************************/
+@@ -519,6 +531,9 @@ CK_RV SoftHSM::C_Initialize(CK_VOID_PTR pInitArgs)
+ 		return CKR_GENERAL_ERROR;
+ 	}
+ 
++	// Load the enabled list of algorithms
++	prepareSupportedMecahnisms(mechanisms_table);
++
+ 	isRemovable = Configuration::i()->getBool("slots.removable", false);
+ 
+ 	// Load the slot manager
+@@ -638,139 +653,154 @@ CK_RV SoftHSM::C_GetTokenInfo(CK_SLOT_ID slotID, CK_TOKEN_INFO_PTR pInfo)
+ 	return token->getTokenInfo(pInfo);
+ }
+ 
+-// Return the list of supported mechanisms for a given slot
+-CK_RV SoftHSM::C_GetMechanismList(CK_SLOT_ID slotID, CK_MECHANISM_TYPE_PTR pMechanismList, CK_ULONG_PTR pulCount)
++void SoftHSM::prepareSupportedMecahnisms(std::map<std::string, CK_MECHANISM_TYPE> &t)
+ {
+-	// A list with the supported mechanisms
+-	CK_ULONG nrSupportedMechanisms = 62;
+-#ifdef WITH_ECC
+-	nrSupportedMechanisms += 2;
+-#endif
+-#if defined(WITH_ECC) || defined(WITH_EDDSA)
+-	nrSupportedMechanisms += 1;
+-#endif
+-#ifdef WITH_FIPS
+-	nrSupportedMechanisms -= 9;
+-#endif
+-#ifdef WITH_GOST
+-	nrSupportedMechanisms += 5;
+-#endif
+-#ifdef HAVE_AES_KEY_WRAP_PAD
+-	nrSupportedMechanisms += 1;
+-#endif
+-#ifdef WITH_RAW_PSS
+-	nrSupportedMechanisms += 1; // CKM_RSA_PKCS_PSS
+-#endif
+-#ifdef WITH_AES_GCM
+-	nrSupportedMechanisms += 1;
+-#endif
+-#ifdef WITH_EDDSA
+-	nrSupportedMechanisms += 2;
+-#endif
+-
+-	CK_MECHANISM_TYPE supportedMechanisms[] =
+-	{
+ #ifndef WITH_FIPS
+-		CKM_MD5,
++	t["CKM_MD5"]			= CKM_MD5;
+ #endif
+-		CKM_SHA_1,
+-		CKM_SHA224,
+-		CKM_SHA256,
+-		CKM_SHA384,
+-		CKM_SHA512,
++	t["CKM_SHA_1"]			= CKM_SHA_1;
++	t["CKM_SHA224"]			= CKM_SHA224;
++	t["CKM_SHA256"]			= CKM_SHA256;
++	t["CKM_SHA384"]			= CKM_SHA384;
++	t["CKM_SHA512"]			= CKM_SHA512;
+ #ifndef WITH_FIPS
+-		CKM_MD5_HMAC,
++	t["CKM_MD5_HMAC"]		= CKM_MD5_HMAC;
+ #endif
+-		CKM_SHA_1_HMAC,
+-		CKM_SHA224_HMAC,
+-		CKM_SHA256_HMAC,
+-		CKM_SHA384_HMAC,
+-		CKM_SHA512_HMAC,
+-		CKM_RSA_PKCS_KEY_PAIR_GEN,
+-		CKM_RSA_PKCS,
+-		CKM_RSA_X_509,
++	t["CKM_SHA_1_HMAC"]		= CKM_SHA_1_HMAC;
++	t["CKM_SHA224_HMAC"]		= CKM_SHA224_HMAC;
++	t["CKM_SHA256_HMAC"]		= CKM_SHA256_HMAC;
++	t["CKM_SHA384_HMAC"]		= CKM_SHA384_HMAC;
++	t["CKM_SHA512_HMAC"]		= CKM_SHA512_HMAC;
++	t["CKM_RSA_PKCS_KEY_PAIR_GEN"]	= CKM_RSA_PKCS_KEY_PAIR_GEN;
++	t["CKM_RSA_PKCS"]		= CKM_RSA_PKCS;
++	t["CKM_RSA_X_509"]		= CKM_RSA_X_509;
+ #ifndef WITH_FIPS
+-		CKM_MD5_RSA_PKCS,
++	t["CKM_MD5_RSA_PKCS"]		= CKM_MD5_RSA_PKCS;
+ #endif
+-		CKM_SHA1_RSA_PKCS,
+-		CKM_RSA_PKCS_OAEP,
+-		CKM_SHA224_RSA_PKCS,
+-		CKM_SHA256_RSA_PKCS,
+-		CKM_SHA384_RSA_PKCS,
+-		CKM_SHA512_RSA_PKCS,
++	t["CKM_SHA1_RSA_PKCS"]		= CKM_SHA1_RSA_PKCS;
++	t["CKM_RSA_PKCS_OAEP"]		= CKM_RSA_PKCS_OAEP;
++	t["CKM_SHA224_RSA_PKCS"]	= CKM_SHA224_RSA_PKCS;
++	t["CKM_SHA256_RSA_PKCS"]	= CKM_SHA256_RSA_PKCS;
++	t["CKM_SHA384_RSA_PKCS"]	= CKM_SHA384_RSA_PKCS;
++	t["CKM_SHA512_RSA_PKCS"]	= CKM_SHA512_RSA_PKCS;
+ #ifdef WITH_RAW_PSS
+-		CKM_RSA_PKCS_PSS,
++	t["CKM_RSA_PKCS_PSS"]		= CKM_RSA_PKCS_PSS;
+ #endif
+-		CKM_SHA1_RSA_PKCS_PSS,
+-		CKM_SHA224_RSA_PKCS_PSS,
+-		CKM_SHA256_RSA_PKCS_PSS,
+-		CKM_SHA384_RSA_PKCS_PSS,
+-		CKM_SHA512_RSA_PKCS_PSS,
+-		CKM_GENERIC_SECRET_KEY_GEN,
++	t["CKM_SHA1_RSA_PKCS_PSS"]	= CKM_SHA1_RSA_PKCS_PSS;
++	t["CKM_SHA224_RSA_PKCS_PSS"]	= CKM_SHA224_RSA_PKCS_PSS;
++	t["CKM_SHA256_RSA_PKCS_PSS"]	= CKM_SHA256_RSA_PKCS_PSS;
++	t["CKM_SHA384_RSA_PKCS_PSS"]	= CKM_SHA384_RSA_PKCS_PSS;
++	t["CKM_SHA512_RSA_PKCS_PSS"]	= CKM_SHA512_RSA_PKCS_PSS;
++	t["CKM_GENERIC_SECRET_KEY_GEN"]	= CKM_GENERIC_SECRET_KEY_GEN;
+ #ifndef WITH_FIPS
+-		CKM_DES_KEY_GEN,
++	t["CKM_DES_KEY_GEN"]		= CKM_DES_KEY_GEN;
+ #endif
+-		CKM_DES2_KEY_GEN,
+-		CKM_DES3_KEY_GEN,
++	t["CKM_DES2_KEY_GEN"]		= CKM_DES2_KEY_GEN;
++	t["CKM_DES3_KEY_GEN"]		= CKM_DES3_KEY_GEN;
+ #ifndef WITH_FIPS
+-		CKM_DES_ECB,
+-		CKM_DES_CBC,
+-		CKM_DES_CBC_PAD,
+-		CKM_DES_ECB_ENCRYPT_DATA,
+-		CKM_DES_CBC_ENCRYPT_DATA,
++	t["CKM_DES_ECB"]		= CKM_DES_ECB;
++	t["CKM_DES_CBC"]		= CKM_DES_CBC;
++	t["CKM_DES_CBC_PAD"]		= CKM_DES_CBC_PAD;
++	t["CKM_DES_ECB_ENCRYPT_DATA"]	= CKM_DES_ECB_ENCRYPT_DATA;
++	t["CKM_DES_CBC_ENCRYPT_DATA"]	= CKM_DES_CBC_ENCRYPT_DATA;
+ #endif
+-		CKM_DES3_ECB,
+-		CKM_DES3_CBC,
+-		CKM_DES3_CBC_PAD,
+-		CKM_DES3_ECB_ENCRYPT_DATA,
+-		CKM_DES3_CBC_ENCRYPT_DATA,
+-		CKM_DES3_CMAC,
+-		CKM_AES_KEY_GEN,
+-		CKM_AES_ECB,
+-		CKM_AES_CBC,
+-		CKM_AES_CBC_PAD,
+-		CKM_AES_CTR,
++	t["CKM_DES3_ECB"]		= CKM_DES3_ECB;
++	t["CKM_DES3_CBC"]		= CKM_DES3_CBC;
++	t["CKM_DES3_CBC_PAD"]		= CKM_DES3_CBC_PAD;
++	t["CKM_DES3_ECB_ENCRYPT_DATA"]	= CKM_DES3_ECB_ENCRYPT_DATA;
++	t["CKM_DES3_CBC_ENCRYPT_DATA"]	= CKM_DES3_CBC_ENCRYPT_DATA;
++	t["CKM_DES3_CMAC"]		= CKM_DES3_CMAC;
++	t["CKM_AES_KEY_GEN"]		= CKM_AES_KEY_GEN;
++	t["CKM_AES_ECB"]		= CKM_AES_ECB;
++	t["CKM_AES_CBC"]		= CKM_AES_CBC;
++	t["CKM_AES_CBC_PAD"]		= CKM_AES_CBC_PAD;
++	t["CKM_AES_CTR"]		= CKM_AES_CTR;
+ #ifdef WITH_AES_GCM
+-		CKM_AES_GCM,
++	t["CKM_AES_GCM"]		= CKM_AES_GCM;
+ #endif
+-		CKM_AES_KEY_WRAP,
++	t["CKM_AES_KEY_WRAP"]		= CKM_AES_KEY_WRAP;
+ #ifdef HAVE_AES_KEY_WRAP_PAD
+-		CKM_AES_KEY_WRAP_PAD,
++	t["CKM_AES_KEY_WRAP_PAD"]	= CKM_AES_KEY_WRAP_PAD;
+ #endif
+-		CKM_AES_ECB_ENCRYPT_DATA,
+-		CKM_AES_CBC_ENCRYPT_DATA,
+-		CKM_AES_CMAC,
+-		CKM_DSA_PARAMETER_GEN,
+-		CKM_DSA_KEY_PAIR_GEN,
+-		CKM_DSA,
+-		CKM_DSA_SHA1,
+-		CKM_DSA_SHA224,
+-		CKM_DSA_SHA256,
+-		CKM_DSA_SHA384,
+-		CKM_DSA_SHA512,
+-		CKM_DH_PKCS_KEY_PAIR_GEN,
+-		CKM_DH_PKCS_PARAMETER_GEN,
+-		CKM_DH_PKCS_DERIVE,
++	t["CKM_AES_ECB_ENCRYPT_DATA"]	= CKM_AES_ECB_ENCRYPT_DATA;
++	t["CKM_AES_CBC_ENCRYPT_DATA"]	= CKM_AES_CBC_ENCRYPT_DATA;
++	t["CKM_AES_CMAC"]		= CKM_AES_CMAC;
++	t["CKM_DSA_PARAMETER_GEN"]	= CKM_DSA_PARAMETER_GEN;
++	t["CKM_DSA_KEY_PAIR_GEN"]	= CKM_DSA_KEY_PAIR_GEN;
++	t["CKM_DSA"]			= CKM_DSA;
++	t["CKM_DSA_SHA1"]		= CKM_DSA_SHA1;
++	t["CKM_DSA_SHA224"]		= CKM_DSA_SHA224;
++	t["CKM_DSA_SHA256"]		= CKM_DSA_SHA256;
++	t["CKM_DSA_SHA384"]		= CKM_DSA_SHA384;
++	t["CKM_DSA_SHA512"]		= CKM_DSA_SHA512;
++	t["CKM_DH_PKCS_KEY_PAIR_GEN"]	= CKM_DH_PKCS_KEY_PAIR_GEN;
++	t["CKM_DH_PKCS_PARAMETER_GEN"]	= CKM_DH_PKCS_PARAMETER_GEN;
++	t["CKM_DH_PKCS_DERIVE"]		= CKM_DH_PKCS_DERIVE;
+ #ifdef WITH_ECC
+-		CKM_EC_KEY_PAIR_GEN,
+-		CKM_ECDSA,
++	t["CKM_EC_KEY_PAIR_GEN"]	= CKM_EC_KEY_PAIR_GEN;
++	t["CKM_ECDSA"]			= CKM_ECDSA;
+ #endif
+ #if defined(WITH_ECC) || defined(WITH_EDDSA)
+-		CKM_ECDH1_DERIVE,
++	t["CKM_ECDH1_DERIVE"]		= CKM_ECDH1_DERIVE;
+ #endif
+ #ifdef WITH_GOST
+-		CKM_GOSTR3411,
+-		CKM_GOSTR3411_HMAC,
+-		CKM_GOSTR3410_KEY_PAIR_GEN,
+-		CKM_GOSTR3410,
+-		CKM_GOSTR3410_WITH_GOSTR3411,
++	t["CKM_GOSTR3411"]		= CKM_GOSTR3411;
++	t["CKM_GOSTR3411_HMAC"]		= CKM_GOSTR3411_HMAC;
++	t["CKM_GOSTR3410_KEY_PAIR_GEN"]	= CKM_GOSTR3410_KEY_PAIR_GEN;
++	t["CKM_GOSTR3410"]		= CKM_GOSTR3410;
++	t["CKM_GOSTR3410_WITH_GOSTR3411"] = CKM_GOSTR3410_WITH_GOSTR3411;
+ #endif
+ #ifdef WITH_EDDSA
+-		CKM_EC_EDWARDS_KEY_PAIR_GEN,
+-		CKM_EDDSA,
++	t["CKM_EC_EDWARDS_KEY_PAIR_GEN"] = CKM_EC_EDWARDS_KEY_PAIR_GEN;
++	t["CKM_EDDSA"]			= CKM_EDDSA;
+ #endif
+-	};
+ 
++	for (auto it = t.begin(); it != t.end(); ++it)
++	{
++		supportedMechanisms.push_back(it->second);
++	}
++
++	/* Check configuration for supported algorithms */
++	std::string mechs = Configuration::i()->getString("token.mechanisms", "ALL");
++	if (mechs != "ALL")
++	{
++		bool negative = (mechs[0] == '-');
++		if (!negative)
++		{
++			/* For positive list, we remove everything */
++			supportedMechanisms.clear();
++		}
++		size_t pos = 0, prev = 0;
++		std::string token;
++		do
++		{
++			pos = mechs.find(",", prev);
++			if (pos == std::string::npos) pos = mechs.length();
++			token = mechs.substr(prev, pos - prev);
++			CK_MECHANISM_TYPE mechanism;
++			try
++			{
++				mechanism = t.at(token);
++				if (!negative)
++					supportedMechanisms.push_back(mechanism);
++				else
++					supportedMechanisms.remove(mechanism);
++			}
++			catch (const std::out_of_range& e)
++			{
++				WARNING_MSG("Unknown mechanism provided: %s", token.c_str());
++			}
++			prev = pos + 1;
++		}
++		while (pos < mechs.length() && prev < mechs.length());
++	}
++
++	nrSupportedMechanisms = supportedMechanisms.size();
++}
++
++// Return the list of supported mechanisms for a given slot
++CK_RV SoftHSM::C_GetMechanismList(CK_SLOT_ID slotID, CK_MECHANISM_TYPE_PTR pMechanismList, CK_ULONG_PTR pulCount)
++{
+ 	if (!isInitialised) return CKR_CRYPTOKI_NOT_INITIALIZED;
+ 	if (pulCount == NULL_PTR) return CKR_ARGUMENTS_BAD;
+ 
+@@ -796,9 +826,11 @@ CK_RV SoftHSM::C_GetMechanismList(CK_SLOT_ID slotID, CK_MECHANISM_TYPE_PTR pMech
+ 
+ 	*pulCount = nrSupportedMechanisms;
+ 
+-	for (CK_ULONG i = 0; i < nrSupportedMechanisms; i ++)
++	int i = 0;
++	auto it = supportedMechanisms.cbegin();
++	for (; it != supportedMechanisms.cend(); it++, i++)
+ 	{
+-		pMechanismList[i] = supportedMechanisms[i];
++		pMechanismList[i] = *it;
+ 	}
+ 
+ 	return CKR_OK;
+@@ -12218,9 +12250,17 @@ CK_RV SoftHSM::MechParamCheckRSAPKCSOAEP(CK_MECHANISM_PTR pMechanism)
+ 	return CKR_OK;
+ }
+ 
+-bool SoftHSM::isMechanismPermitted(OSObject* key, CK_MECHANISM_PTR pMechanism) {
++bool SoftHSM::isMechanismPermitted(OSObject* key, CK_MECHANISM_PTR pMechanism)
++{
++	std::list<CK_MECHANISM_TYPE> mechs = supportedMechanisms;
++	/* First check if the algorithm is enabled in the global configuration */
++	auto it = std::find(mechs.begin(), mechs.end(), pMechanism->mechanism);
++	if (it == mechs.end())
++		return false;
++
+ 	OSAttribute attribute = key->getAttribute(CKA_ALLOWED_MECHANISMS);
+ 	std::set<CK_MECHANISM_TYPE> allowed = attribute.getMechanismTypeSetValue();
++
+ 	if (allowed.empty()) {
+ 		return true;
+ 	}
+diff --git a/src/lib/SoftHSM.h b/src/lib/SoftHSM.h
+index e82ac8c..0d6662a 100644
+--- a/src/lib/SoftHSM.h
++++ b/src/lib/SoftHSM.h
+@@ -477,5 +477,6 @@ private:
+ 	CK_RV MechParamCheckRSAPKCSOAEP(CK_MECHANISM_PTR pMechanism);
+ 
+ 	static bool isMechanismPermitted(OSObject* key, CK_MECHANISM_PTR pMechanism);
++	static void prepareSupportedMecahnisms(std::map<std::string, CK_MECHANISM_TYPE> &t);
+ };
+ 
+diff --git a/src/lib/common/CMakeLists.txt b/src/lib/common/CMakeLists.txt
+index 4dc1294..7fe06bb 100644
+--- a/src/lib/common/CMakeLists.txt
++++ b/src/lib/common/CMakeLists.txt
+@@ -16,8 +16,7 @@ set(SOURCES Configuration.cpp
+ 
+ include_directories(${INCLUDE_DIRS})
+ 
+-add_library(${PROJECT_NAME}-obj OBJECT ${SOURCES})
+-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}-obj>)
++add_library(${PROJECT_NAME} OBJECT ${SOURCES})
+ 
+ set(softhsmtokendir ${DEFAULT_TOKENDIR})
+ set(default_softhsm2_conf ${CMAKE_INSTALL_FULL_SYSCONFDIR}/softhsm2.conf)
+diff --git a/src/lib/common/Configuration.cpp b/src/lib/common/Configuration.cpp
+index a7f6cc6..cd8dd01 100644
+--- a/src/lib/common/Configuration.cpp
++++ b/src/lib/common/Configuration.cpp
+@@ -48,6 +48,7 @@ const struct config Configuration::valid_config[] = {
+ 	{ "objectstore.backend",	CONFIG_TYPE_STRING },
+ 	{ "log.level",			CONFIG_TYPE_STRING },
+ 	{ "slots.removable",		CONFIG_TYPE_BOOL },
++	{ "token.mechanisms",		CONFIG_TYPE_STRING },
+ 	{ "",				CONFIG_TYPE_UNSUPPORTED }
+ };
+ 
+diff --git a/src/lib/common/softhsm2.conf.5.in b/src/lib/common/softhsm2.conf.5.in
+index 5291a09..1c9527e 100644
+--- a/src/lib/common/softhsm2.conf.5.in
++++ b/src/lib/common/softhsm2.conf.5.in
+@@ -64,6 +64,24 @@ slots.removable = true
+ .fi
+ .RE
+ .LP
++.SH TOKEN.MECHANISMS
++Allows to enable and disable any of the PKCS#11 mechanisms reported in the
++C_GetMechanismList().
++The option accepts string argument containing the comma separated list of all
++algorithms that should be enabled (do not forget about the keygen mechanisms).
++The list can be prefixed with minus sign "-" to list only the disabled
++mechanisms.
++Additionally, special keyword ALL can be used to enable all the known
++mechanisms (default). Unknown mechanisms are ignored.
++This option has higher priority than the CKA_ALLOWED_MECHANISMS attribute
++on the key objects.
++.LP
++.RS
++.nf
++token.mechanisms = ALL
++.fi
++.RE
++.LP
+ .SH ENVIRONMENT
+ .TP
+ SOFTHSM2_CONF
+diff --git a/src/lib/common/softhsm2.conf.in b/src/lib/common/softhsm2.conf.in
+index 3d5728d..41f5b10 100644
+--- a/src/lib/common/softhsm2.conf.in
++++ b/src/lib/common/softhsm2.conf.in
+@@ -8,3 +8,6 @@ log.level = ERROR
+ 
+ # If CKF_REMOVABLE_DEVICE flag should be set
+ slots.removable = false
++
++# Enable and disable PKCS#11 mechanisms using token.mechanisms.
++token.mechanisms = ALL
+diff --git a/src/lib/crypto/BotanEDKeyPair.cpp b/src/lib/crypto/BotanEDKeyPair.cpp
+index 3be3fa5..3e967e5 100644
+--- a/src/lib/crypto/BotanEDKeyPair.cpp
++++ b/src/lib/crypto/BotanEDKeyPair.cpp
+@@ -31,6 +31,7 @@
+  *****************************************************************************/
+ 
+ #include "config.h"
++#ifdef WITH_EDDSA
+ #include "log.h"
+ #include "BotanEDKeyPair.h"
+ 
+@@ -67,3 +68,4 @@ const PrivateKey* BotanEDKeyPair::getConstPrivateKey() const
+ {
+ 	return &privKey;
+ }
++#endif
+diff --git a/src/lib/crypto/BotanEDKeyPair.h b/src/lib/crypto/BotanEDKeyPair.h
+index 02d6a4c..4f2cffe 100644
+--- a/src/lib/crypto/BotanEDKeyPair.h
++++ b/src/lib/crypto/BotanEDKeyPair.h
+@@ -34,6 +34,7 @@
+ #define _SOFTHSM_V2_BOTANEDKEYPAIR_H
+ 
+ #include "config.h"
++#ifdef WITH_EDDSA
+ #include "AsymmetricKeyPair.h"
+ #include "BotanEDPublicKey.h"
+ #include "BotanEDPrivateKey.h"
+@@ -62,5 +63,6 @@ private:
+ 	// The private key
+ 	BotanEDPrivateKey privKey;
+ };
++#endif
+ #endif // !_SOFTHSM_V2_BOTANEDKEYPAIR_H
+ 
+diff --git a/src/lib/crypto/BotanEDPrivateKey.h b/src/lib/crypto/BotanEDPrivateKey.h
+index d71f6c0..ac236bb 100644
+--- a/src/lib/crypto/BotanEDPrivateKey.h
++++ b/src/lib/crypto/BotanEDPrivateKey.h
+@@ -34,6 +34,7 @@
+ #define _SOFTHSM_V2_BOTANEDPRIVATEKEY_H
+ 
+ #include "config.h"
++#ifdef WITH_EDDSA
+ #include "EDPrivateKey.h"
+ #include <botan/pk_keys.h>
+ 
+@@ -82,4 +83,5 @@ private:
+ 	// Create the Botan representation of the key
+ 	void createBotanKey();
+ };
++#endif
+ #endif // !_SOFTHSM_V2_BOTANEDPRIVATEKEY_H
+diff --git a/src/lib/crypto/BotanEDPublicKey.h b/src/lib/crypto/BotanEDPublicKey.h
+index fce34a5..15e6d45 100644
+--- a/src/lib/crypto/BotanEDPublicKey.h
++++ b/src/lib/crypto/BotanEDPublicKey.h
+@@ -34,6 +34,7 @@
+ #define _SOFTHSM_V2_BOTANEDPUBLICKEY_H
+ 
+ #include "config.h"
++#ifdef WITH_EDDSA
+ #include "EDPublicKey.h"
+ #include <botan/pk_keys.h>
+ 
+@@ -74,4 +75,5 @@ private:
+ 	// Create the Botan representation of the key
+ 	void createBotanKey();
+ };
++#endif
+ #endif // !_SOFTHSM_V2_BOTANEDPUBLICKEY_H
+diff --git a/src/lib/crypto/CMakeLists.txt b/src/lib/crypto/CMakeLists.txt
+index e175541..0230f5a 100644
+--- a/src/lib/crypto/CMakeLists.txt
++++ b/src/lib/crypto/CMakeLists.txt
+@@ -134,9 +134,12 @@ endif(WITH_BOTAN)
+ 
+ include_directories(${INCLUDE_DIRS})
+ 
+-add_library(${PROJECT_NAME}-obj OBJECT ${SOURCES})
+-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}-obj>)
+-target_link_libraries(${PROJECT_NAME} ${CRYPTO_LIBS})
++add_library(${PROJECT_NAME} OBJECT ${SOURCES})
++# Versions before CMake 3.12 cannot use target_link_libraries on object
++# libraries, a workaround exists in src/lib/CMakeLists.txt.
++if(NOT CMAKE_VERSION VERSION_LESS "3.12")
++        target_link_libraries(${PROJECT_NAME} ${CRYPTO_LIBS})
++endif()
+ 
+ if(BUILD_TESTS)
+     add_subdirectory(test)
+diff --git a/src/lib/crypto/OSSLCryptoFactory.cpp b/src/lib/crypto/OSSLCryptoFactory.cpp
+index dc5f737..04d383d 100644
+--- a/src/lib/crypto/OSSLCryptoFactory.cpp
++++ b/src/lib/crypto/OSSLCryptoFactory.cpp
+@@ -141,8 +141,10 @@ OSSLCryptoFactory::OSSLCryptoFactory()
+ 	// Initialise OpenSSL
+ 	OpenSSL_add_all_algorithms();
+ 
++#if !( OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER) )
+ 	// Make sure RDRAND is loaded first
+ 	ENGINE_load_rdrand();
++#endif
+ 	// Locate the engine
+ 	rdrand_engine = ENGINE_by_id("rdrand");
+ 	// Use RDRAND if available
+diff --git a/src/lib/crypto/OSSLEVPSymmetricAlgorithm.cpp b/src/lib/crypto/OSSLEVPSymmetricAlgorithm.cpp
+index d43e741..5637225 100644
+--- a/src/lib/crypto/OSSLEVPSymmetricAlgorithm.cpp
++++ b/src/lib/crypto/OSSLEVPSymmetricAlgorithm.cpp
+@@ -42,19 +42,68 @@
+ OSSLEVPSymmetricAlgorithm::OSSLEVPSymmetricAlgorithm()
+ {
+ 	pCurCTX = NULL;
+-	maximumBytes = BN_new();
+-	BN_one(maximumBytes);
+-	BN_set_negative(maximumBytes, 1);
+-	counterBytes = BN_new();
+-	BN_zero(counterBytes);
++	maximumBytes = NULL;
++	counterBytes = NULL;
+ }
+ 
+ // Destructor
+ OSSLEVPSymmetricAlgorithm::~OSSLEVPSymmetricAlgorithm()
+ {
+-	EVP_CIPHER_CTX_free(pCurCTX);
++	/* In case of custom allocator from BIND, even NULL pointer might crash
++	 * the library if freed after deinitialization. Do not rely on null handling
++	 * as a workaround. */
++	if (pCurCTX)
++		EVP_CIPHER_CTX_free(pCurCTX);
++	if (maximumBytes)
++		BN_free(maximumBytes);
++	if (counterBytes)
++		BN_free(counterBytes);
++}
++
++void OSSLEVPSymmetricAlgorithm::counterBitsInit(const ByteString& iv, size_t counterBits)
++{
+ 	BN_free(maximumBytes);
++	maximumBytes = NULL;
+ 	BN_free(counterBytes);
++	counterBytes = NULL;
++
++	// Check the counter bits
++	if (counterBits > 0)
++	{
++		BIGNUM* counter = OSSL::byteString2bn(iv);
++		BN_mask_bits(counter, counterBits);
++
++		// Reverse the bits
++		while (counterBits > 0)
++		{
++			counterBits--;
++			if (BN_is_bit_set(counter, counterBits))
++			{
++				BN_clear_bit(counter, counterBits);
++			}
++			else
++			{
++				BN_set_bit(counter, counterBits);
++			}
++		}
++
++		// Set the maximum bytes
++		BN_add_word(counter, 1);
++		BN_mul_word(counter, getBlockSize());
++		maximumBytes = counter;
++		counterBytes = BN_new();
++		BN_zero(counterBytes);
++	}
++}
++
++void OSSLEVPSymmetricAlgorithm::clean()
++{
++		EVP_CIPHER_CTX_free(pCurCTX);
++		pCurCTX = NULL;
++		BN_free(maximumBytes);
++		maximumBytes = NULL;
++		BN_free(counterBytes);
++		counterBytes = NULL;
+ }
+ 
+ // Encryption functions
+@@ -88,38 +137,7 @@ bool OSSLEVPSymmetricAlgorithm::encryptInit(const SymmetricKey* key, const SymMo
+ 		iv.wipe(getBlockSize());
+ 	}
+ 
+-	// Check the counter bits
+-	if (counterBits > 0)
+-	{
+-		BIGNUM* counter = OSSL::byteString2bn(iv);
+-		BN_mask_bits(counter, counterBits);
+-
+-		// Reverse the bits
+-		while (counterBits > 0)
+-		{
+-			counterBits--;
+-			if (BN_is_bit_set(counter, counterBits))
+-			{
+-				BN_clear_bit(counter, counterBits);
+-			}
+-			else
+-			{
+-				BN_set_bit(counter, counterBits);
+-			}
+-		}
+-
+-		// Set the maximum bytes
+-		BN_add_word(counter, 1);
+-		BN_mul_word(counter, getBlockSize());
+-		BN_copy(maximumBytes, counter);
+-		BN_free(counter);
+-		BN_zero(counterBytes);
+-	}
+-	else
+-	{
+-		BN_one(maximumBytes);
+-		BN_set_negative(maximumBytes, 1);
+-	}
++	counterBitsInit(iv, counterBits);
+ 
+ 	// Determine the cipher class
+ 	const EVP_CIPHER* cipher = getCipher();
+@@ -167,8 +185,7 @@ bool OSSLEVPSymmetricAlgorithm::encryptInit(const SymmetricKey* key, const SymMo
+ 	{
+ 		ERROR_MSG("Failed to initialise EVP encrypt operation: %s", ERR_error_string(ERR_get_error(), NULL));
+ 
+-		EVP_CIPHER_CTX_free(pCurCTX);
+-		pCurCTX = NULL;
++		clean();
+ 
+ 		ByteString dummy;
+ 		SymmetricAlgorithm::encryptFinal(dummy);
+@@ -185,8 +202,7 @@ bool OSSLEVPSymmetricAlgorithm::encryptInit(const SymmetricKey* key, const SymMo
+ 		{
+ 			ERROR_MSG("Failed to update with AAD: %s", ERR_error_string(ERR_get_error(), NULL));
+ 
+-			EVP_CIPHER_CTX_free(pCurCTX);
+-			pCurCTX = NULL;
++			clean();
+ 
+ 			ByteString dummy;
+ 			SymmetricAlgorithm::encryptFinal(dummy);
+@@ -202,9 +218,7 @@ bool OSSLEVPSymmetricAlgorithm::encryptUpdate(const ByteString& data, ByteString
+ {
+ 	if (!SymmetricAlgorithm::encryptUpdate(data, encryptedData))
+ 	{
+-		EVP_CIPHER_CTX_free(pCurCTX);
+-		pCurCTX = NULL;
+-
++		clean();
+ 		return false;
+ 	}
+ 
+@@ -216,7 +230,7 @@ bool OSSLEVPSymmetricAlgorithm::encryptUpdate(const ByteString& data, ByteString
+ 	}
+ 
+ 	// Count number of bytes written
+-	if (!BN_is_negative(maximumBytes))
++	if (maximumBytes)
+ 	{
+ 		BN_add_word(counterBytes, data.size());
+ 	}
+@@ -229,8 +243,7 @@ bool OSSLEVPSymmetricAlgorithm::encryptUpdate(const ByteString& data, ByteString
+ 	{
+ 		ERROR_MSG("EVP_EncryptUpdate failed: %s", ERR_error_string(ERR_get_error(), NULL));
+ 
+-		EVP_CIPHER_CTX_free(pCurCTX);
+-		pCurCTX = NULL;
++		clean();
+ 
+ 		ByteString dummy;
+ 		SymmetricAlgorithm::encryptFinal(dummy);
+@@ -252,9 +265,7 @@ bool OSSLEVPSymmetricAlgorithm::encryptFinal(ByteString& encryptedData)
+ 
+ 	if (!SymmetricAlgorithm::encryptFinal(encryptedData))
+ 	{
+-		EVP_CIPHER_CTX_free(pCurCTX);
+-		pCurCTX = NULL;
+-
++		clean();
+ 		return false;
+ 	}
+ 
+@@ -267,8 +278,7 @@ bool OSSLEVPSymmetricAlgorithm::encryptFinal(ByteString& encryptedData)
+ 	{
+ 		ERROR_MSG("EVP_EncryptFinal failed: %s", ERR_error_string(ERR_get_error(), NULL));
+ 
+-		EVP_CIPHER_CTX_free(pCurCTX);
+-		pCurCTX = NULL;
++		clean();
+ 
+ 		return false;
+ 	}
+@@ -284,8 +294,7 @@ bool OSSLEVPSymmetricAlgorithm::encryptFinal(ByteString& encryptedData)
+ 		encryptedData += tag;
+ 	}
+ 
+-	EVP_CIPHER_CTX_free(pCurCTX);
+-	pCurCTX = NULL;
++	clean();
+ 
+ 	return true;
+ }
+@@ -321,38 +330,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptInit(const SymmetricKey* key, const SymMo
+ 		iv.wipe(getBlockSize());
+ 	}
+ 
+-	// Check the counter bits
+-	if (counterBits > 0)
+-	{
+-		BIGNUM* counter = OSSL::byteString2bn(iv);
+-		BN_mask_bits(counter, counterBits);
+-
+-		// Reverse the bits
+-		while (counterBits > 0)
+-		{
+-			counterBits--;
+-			if (BN_is_bit_set(counter, counterBits))
+-			{
+-				BN_clear_bit(counter, counterBits);
+-			}
+-			else
+-			{
+-				BN_set_bit(counter, counterBits);
+-			}
+-		}
+-
+-		// Set the maximum bytes
+-		BN_add_word(counter, 1);
+-		BN_mul_word(counter, getBlockSize());
+-		BN_copy(maximumBytes, counter);
+-		BN_free(counter);
+-		BN_zero(counterBytes);
+-	}
+-	else
+-	{
+-		BN_one(maximumBytes);
+-		BN_set_negative(maximumBytes, 1);
+-	}
++	counterBitsInit(iv, counterBits);
+ 
+ 	// Determine the cipher class
+ 	const EVP_CIPHER* cipher = getCipher();
+@@ -400,8 +378,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptInit(const SymmetricKey* key, const SymMo
+ 	{
+ 		ERROR_MSG("Failed to initialise EVP decrypt operation: %s", ERR_error_string(ERR_get_error(), NULL));
+ 
+-		EVP_CIPHER_CTX_free(pCurCTX);
+-		pCurCTX = NULL;
++		clean();
+ 
+ 		ByteString dummy;
+ 		SymmetricAlgorithm::decryptFinal(dummy);
+@@ -418,8 +395,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptInit(const SymmetricKey* key, const SymMo
+ 		{
+ 			ERROR_MSG("Failed to update with AAD: %s", ERR_error_string(ERR_get_error(), NULL));
+ 
+-			EVP_CIPHER_CTX_free(pCurCTX);
+-			pCurCTX = NULL;
++			clean();
+ 
+ 			ByteString dummy;
+ 			SymmetricAlgorithm::decryptFinal(dummy);
+@@ -435,9 +411,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptUpdate(const ByteString& encryptedData, B
+ {
+ 	if (!SymmetricAlgorithm::decryptUpdate(encryptedData, data))
+ 	{
+-		EVP_CIPHER_CTX_free(pCurCTX);
+-		pCurCTX = NULL;
+-
++		clean();
+ 		return false;
+ 	}
+ 
+@@ -449,7 +423,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptUpdate(const ByteString& encryptedData, B
+ 	}
+ 
+ 	// Count number of bytes written
+-	if (!BN_is_negative(maximumBytes))
++	if (maximumBytes)
+ 	{
+ 		BN_add_word(counterBytes, encryptedData.size());
+ 	}
+@@ -465,8 +439,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptUpdate(const ByteString& encryptedData, B
+ 	{
+ 		ERROR_MSG("EVP_DecryptUpdate failed: %s", ERR_error_string(ERR_get_error(), NULL));
+ 
+-		EVP_CIPHER_CTX_free(pCurCTX);
+-		pCurCTX = NULL;
++		clean();
+ 
+ 		ByteString dummy;
+ 		SymmetricAlgorithm::decryptFinal(dummy);
+@@ -491,9 +464,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptFinal(ByteString& data)
+ 
+ 	if (!SymmetricAlgorithm::decryptFinal(data))
+ 	{
+-		EVP_CIPHER_CTX_free(pCurCTX);
+-		pCurCTX = NULL;
+-
++		clean();
+ 		return false;
+ 	}
+ 
+@@ -505,8 +476,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptFinal(ByteString& data)
+ 		{
+ 			ERROR_MSG("Tag bytes (%d) does not fit in AEAD buffer (%d)", tagBytes, aeadBuffer.size());
+ 
+-			EVP_CIPHER_CTX_free(pCurCTX);
+-			pCurCTX = NULL;
++			clean();
+ 
+ 			return false;
+ 		}
+@@ -522,8 +492,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptFinal(ByteString& data)
+ 		{
+ 			ERROR_MSG("EVP_DecryptUpdate failed: %s", ERR_error_string(ERR_get_error(), NULL));
+ 
+-			EVP_CIPHER_CTX_free(pCurCTX);
+-			pCurCTX = NULL;
++			clean();
+ 
+ 			return false;
+ 		}
+@@ -542,8 +511,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptFinal(ByteString& data)
+ 	{
+ 		ERROR_MSG("EVP_DecryptFinal failed (0x%08X): %s", rv, ERR_error_string(ERR_get_error(), NULL));
+ 
+-		EVP_CIPHER_CTX_free(pCurCTX);
+-		pCurCTX = NULL;
++		clean();
+ 
+ 		return false;
+ 	}
+@@ -551,8 +519,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptFinal(ByteString& data)
+ 	// Resize the output block
+ 	data.resize(initialSize + outLen);
+ 
+-	EVP_CIPHER_CTX_free(pCurCTX);
+-	pCurCTX = NULL;
++	clean();
+ 
+ 	return true;
+ }
+@@ -560,7 +527,7 @@ bool OSSLEVPSymmetricAlgorithm::decryptFinal(ByteString& data)
+ // Check if more bytes of data can be encrypted
+ bool OSSLEVPSymmetricAlgorithm::checkMaximumBytes(unsigned long bytes)
+ {
+-	if (BN_is_negative(maximumBytes)) return true;
++	if (maximumBytes == NULL) return true;
+ 
+ 	BIGNUM* bigNum = BN_new();
+ 	BN_copy(bigNum, counterBytes);
+diff --git a/src/lib/crypto/OSSLEVPSymmetricAlgorithm.h b/src/lib/crypto/OSSLEVPSymmetricAlgorithm.h
+index 66bbeef..0205590 100644
+--- a/src/lib/crypto/OSSLEVPSymmetricAlgorithm.h
++++ b/src/lib/crypto/OSSLEVPSymmetricAlgorithm.h
+@@ -69,6 +69,9 @@ protected:
+ 	virtual const EVP_CIPHER* getCipher() const = 0;
+ 
+ private:
++	void counterBitsInit(const ByteString& IV, size_t counterBits);
++	void clean();
++
+ 	// The current EVP context
+ 	EVP_CIPHER_CTX* pCurCTX;
+ 
+diff --git a/src/lib/data_mgr/ByteString.cpp b/src/lib/data_mgr/ByteString.cpp
+index e133f71..c477aab 100644
+--- a/src/lib/data_mgr/ByteString.cpp
++++ b/src/lib/data_mgr/ByteString.cpp
+@@ -37,6 +37,14 @@
+ #include "log.h"
+ #include "ByteString.h"
+ 
++/**
++ * Backward compatible fix: byte_str()/const_byte_str() to
++ * return a non-NULL pointer, even if size() == 0, and yet
++ * be compatible with -Wp,-D_GLIBCXX_ASSERTIONS stricter
++ * bounds checking
++ */
++static unsigned char sentinel[1];
++
+ // Constructors
+ ByteString::ByteString()
+ {
+@@ -187,13 +195,21 @@ unsigned char& ByteString::operator[](size_t pos)
+ // Return the byte string data
+ unsigned char* ByteString::byte_str()
+ {
+-	return &byteString[0];
++	if (byteString.size() != 0) {
++		return &byteString[0];
++	} else {
++		return (unsigned char*) sentinel;
++	}
+ }
+ 
+ // Return the const byte string
+ const unsigned char* ByteString::const_byte_str() const
+ {
+-	return (const unsigned char*) &byteString[0];
++	if (byteString.size() != 0) {
++		return (const unsigned char*) &byteString[0];
++	} else {
++		return (const unsigned char*) sentinel;
++	}
+ }
+ 
+ // Return a hexadecimal character representation of the string
+diff --git a/src/lib/data_mgr/CMakeLists.txt b/src/lib/data_mgr/CMakeLists.txt
+index 802fe51..efa7427 100644
+--- a/src/lib/data_mgr/CMakeLists.txt
++++ b/src/lib/data_mgr/CMakeLists.txt
+@@ -15,8 +15,7 @@ set(SOURCES ByteString.cpp
+ 
+ include_directories(${INCLUDE_DIRS})
+ 
+-add_library(${PROJECT_NAME}-obj OBJECT ${SOURCES})
+-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}-obj>)
++add_library(${PROJECT_NAME} OBJECT ${SOURCES})
+ 
+ if(BUILD_TESTS)
+     add_subdirectory(test)
+diff --git a/src/lib/handle_mgr/CMakeLists.txt b/src/lib/handle_mgr/CMakeLists.txt
+index a89c5d6..66e27c2 100644
+--- a/src/lib/handle_mgr/CMakeLists.txt
++++ b/src/lib/handle_mgr/CMakeLists.txt
+@@ -15,8 +15,7 @@ set(SOURCES HandleManager.cpp
+ 
+ include_directories(${INCLUDE_DIRS})
+ 
+-add_library(${PROJECT_NAME}-obj OBJECT ${SOURCES})
+-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}-obj>)
++add_library(${PROJECT_NAME} OBJECT ${SOURCES})
+ 
+ if(BUILD_TESTS)
+     add_subdirectory(test)
+diff --git a/src/lib/handle_mgr/HandleManager.cpp b/src/lib/handle_mgr/HandleManager.cpp
+index ccf42d0..f2e9e92 100644
+--- a/src/lib/handle_mgr/HandleManager.cpp
++++ b/src/lib/handle_mgr/HandleManager.cpp
+@@ -161,48 +161,46 @@ void HandleManager::destroyObject(const CK_OBJECT_HANDLE hObject)
+ void HandleManager::sessionClosed(const CK_SESSION_HANDLE hSession)
+ {
+ 	CK_SLOT_ID slotID;
+-	{
+-		MutexLocker lock(handlesMutex);
++	MutexLocker lock(handlesMutex);
+ 
+-		std::map< CK_ULONG, Handle>::iterator it = handles.find(hSession);
+-		if (it == handles.end() || CKH_SESSION != it->second.kind)
+-			return; // Unable to find the specified session.
++	std::map< CK_ULONG, Handle>::iterator it = handles.find(hSession);
++	if (it == handles.end() || CKH_SESSION != it->second.kind)
++		return; // Unable to find the specified session.
+ 
+-		slotID = it->second.slotID;
++	slotID = it->second.slotID;
+ 
+-		// session closed, so we can erase information about it.
+-		handles.erase(it);
++	// session closed, so we can erase information about it.
++	handles.erase(it);
+ 
+-		// Erase all session object handles associated with the given session handle.
+-		CK_ULONG openSessionCount = 0;
+-		for (it = handles.begin(); it != handles.end(); ) {
+-			Handle &h = it->second;
+-			if (CKH_SESSION == h.kind && slotID == h.slotID) {
+-				++openSessionCount; // another session is open for this slotID.
+-			} else {
+-				if (CKH_OBJECT == h.kind && hSession == h.hSession) {
+-					// A session object is present for the given session, so erase it.
+-					objects.erase(it->second.object);
+-					// Iterator post-incrementing (it++) will return a copy of the original it (which points to handle to be deleted).
+-					handles.erase(it++);
+-					continue;
+-				}
++	// Erase all session object handles associated with the given session handle.
++	CK_ULONG openSessionCount = 0;
++	for (it = handles.begin(); it != handles.end(); ) {
++		Handle &h = it->second;
++		if (CKH_SESSION == h.kind && slotID == h.slotID) {
++			++openSessionCount; // another session is open for this slotID.
++		} else {
++			if (CKH_OBJECT == h.kind && hSession == h.hSession) {
++				// A session object is present for the given session, so erase it.
++				objects.erase(it->second.object);
++				// Iterator post-incrementing (it++) will return a copy of the original it (which points to handle to be deleted).
++				handles.erase(it++);
++				continue;
+ 			}
+-			++it;
+ 		}
+-
+-		 // We are done when there are still sessions open.
+-		if (openSessionCount)
+-			return;
++		++it;
+ 	}
+ 
++	 // We are done when there are still sessions open.
++	if (openSessionCount)
++		return;
++
+ 	// No more sessions open for this token, so remove all object handles that are still valid for the given slotID.
+-	allSessionsClosed(slotID);
++	allSessionsClosed(slotID, true);
+ }
+ 
+-void HandleManager::allSessionsClosed(const CK_SLOT_ID slotID)
++void HandleManager::allSessionsClosed(const CK_SLOT_ID slotID, bool isLocked)
+ {
+-	MutexLocker lock(handlesMutex);
++	MutexLocker lock(isLocked ? NULL : handlesMutex);
+ 
+ 	// Erase all "session", "session object" and "token object" handles for a given slot id.
+ 	std::map< CK_ULONG, Handle>::iterator it;
+diff --git a/src/lib/handle_mgr/HandleManager.h b/src/lib/handle_mgr/HandleManager.h
+index e85e628..54fe30a 100644
+--- a/src/lib/handle_mgr/HandleManager.h
++++ b/src/lib/handle_mgr/HandleManager.h
+@@ -77,7 +77,7 @@ public:
+ 
+     // Remove all session and object handles for the given slotID.
+     // All handles for the given slotID will become invalid.
+-    void allSessionsClosed(const CK_SLOT_ID slotID);
++    void allSessionsClosed(const CK_SLOT_ID slotID, bool isLocked = false);
+ 
+     // Remove all handles to private objects for the given slotID.
+     // All handles to public objects for the given slotID remain valid.
+diff --git a/src/lib/object_store/CMakeLists.txt b/src/lib/object_store/CMakeLists.txt
+index dac6813..64d4af6 100644
+--- a/src/lib/object_store/CMakeLists.txt
++++ b/src/lib/object_store/CMakeLists.txt
+@@ -32,9 +32,12 @@ endif(WITH_OBJECTSTORE_BACKEND_DB)
+ 
+ include_directories(${INCLUDE_DIRS})
+ 
+-add_library(${PROJECT_NAME}-obj OBJECT ${SOURCES})
+-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}-obj>)
+-target_link_libraries(${PROJECT_NAME} ${SQLITE3_LIBS})
++add_library(${PROJECT_NAME} OBJECT ${SOURCES})
++# Versions before CMake 3.12 cannot use target_link_libraries on object
++# libraries, a workaround exists in src/lib/CMakeLists.txt.
++if(NOT CMAKE_VERSION VERSION_LESS "3.12")
++        target_link_libraries(${PROJECT_NAME} ${SQLITE3_LIBS})
++endif()
+ 
+ if(BUILD_TESTS)
+     add_subdirectory(test)
+diff --git a/src/lib/object_store/DBToken.cpp b/src/lib/object_store/DBToken.cpp
+index e734372..d455b37 100644
+--- a/src/lib/object_store/DBToken.cpp
++++ b/src/lib/object_store/DBToken.cpp
+@@ -407,9 +407,10 @@ bool DBToken::setUserPIN(ByteString userPINBlob)
+ 		return false;
+ 	}
+ 
+-	// Retrieve flags from the database and reset flags related to tries and expiration of the SOPIN.
+-	CK_ULONG flags = tokenObject.getAttribute(CKA_OS_TOKENFLAGS).getUnsignedLongValue()
+-					| (CKF_USER_PIN_INITIALIZED & ~(CKF_USER_PIN_COUNT_LOW | CKF_USER_PIN_FINAL_TRY | CKF_USER_PIN_LOCKED | CKF_USER_PIN_TO_BE_CHANGED));
++	// Retrieve flags from the database and reset flags related to tries and expiration of the user PIN.
++	CK_ULONG flags = tokenObject.getAttribute(CKA_OS_TOKENFLAGS).getUnsignedLongValue();
++	flags |= CKF_USER_PIN_INITIALIZED;
++	flags &= ~(CKF_USER_PIN_COUNT_LOW | CKF_USER_PIN_FINAL_TRY | CKF_USER_PIN_LOCKED | CKF_USER_PIN_TO_BE_CHANGED);
+ 
+ 	OSAttribute changedTokenFlags(flags);
+ 	if (!tokenObject.setAttribute(CKA_OS_TOKENFLAGS, changedTokenFlags))
+@@ -841,7 +842,7 @@ bool DBToken::resetToken(const ByteString& label)
+ 		return false;
+ 	}
+ 
+-	// Retrieve flags from the database and reset flags related to tries and expiration of the SOPIN.
++	// Retrieve flags from the database and reset flags related to tries and expiration of the user PIN.
+ 	CK_ULONG flags = tokenObject.getAttribute(CKA_OS_TOKENFLAGS).getUnsignedLongValue()
+ 					& ~(CKF_USER_PIN_INITIALIZED | CKF_USER_PIN_COUNT_LOW | CKF_USER_PIN_FINAL_TRY | CKF_USER_PIN_LOCKED | CKF_USER_PIN_TO_BE_CHANGED);
+ 
+diff --git a/src/lib/session_mgr/CMakeLists.txt b/src/lib/session_mgr/CMakeLists.txt
+index 58a72df..3c360dd 100644
+--- a/src/lib/session_mgr/CMakeLists.txt
++++ b/src/lib/session_mgr/CMakeLists.txt
+@@ -15,8 +15,7 @@ set(SOURCES SessionManager.cpp
+ 
+ include_directories(${INCLUDE_DIRS})
+ 
+-add_library(${PROJECT_NAME}-obj OBJECT ${SOURCES})
+-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}-obj>)
++add_library(${PROJECT_NAME} OBJECT ${SOURCES})
+ 
+ if(BUILD_TESTS)
+     add_subdirectory(test)
+diff --git a/src/lib/slot_mgr/CMakeLists.txt b/src/lib/slot_mgr/CMakeLists.txt
+index f8d4049..53155d3 100644
+--- a/src/lib/slot_mgr/CMakeLists.txt
++++ b/src/lib/slot_mgr/CMakeLists.txt
+@@ -16,8 +16,7 @@ set(SOURCES SlotManager.cpp
+ 
+ include_directories(${INCLUDE_DIRS})
+ 
+-add_library(${PROJECT_NAME}-obj OBJECT ${SOURCES})
+-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}-obj>)
++add_library(${PROJECT_NAME} OBJECT ${SOURCES})
+ 
+ if(BUILD_TESTS)
+     add_subdirectory(test)
+diff --git a/src/lib/test/CMakeLists.txt b/src/lib/test/CMakeLists.txt
+index 8d811a1..cdc628f 100644
+--- a/src/lib/test/CMakeLists.txt
++++ b/src/lib/test/CMakeLists.txt
+@@ -40,4 +40,5 @@ add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME}
+ set(builddir ${PROJECT_BINARY_DIR})
+ configure_file(softhsm2.conf.in softhsm2.conf)
+ configure_file(softhsm2-alt.conf.in softhsm2-alt.conf)
++configure_file(softhsm2-mech.conf.in softhsm2-mech.conf)
+ configure_file(tokens/dummy.in tokens/dummy)
+diff --git a/src/lib/test/InfoTests.cpp b/src/lib/test/InfoTests.cpp
+index 958d96e..5414378 100644
+--- a/src/lib/test/InfoTests.cpp
++++ b/src/lib/test/InfoTests.cpp
+@@ -260,6 +260,7 @@ void InfoTests::testGetMechanismList()
+ 	// Get the size of the buffer
+ 	rv = CRYPTOKI_F_PTR( C_GetMechanismList(m_initializedTokenSlotID, NULL_PTR, &ulMechCount) );
+ 	CPPUNIT_ASSERT(rv == CKR_OK);
++	CPPUNIT_ASSERT(ulMechCount > 2);
+ 	pMechanismList = (CK_MECHANISM_TYPE_PTR)malloc(ulMechCount * sizeof(CK_MECHANISM_TYPE_PTR));
+ 
+ 	// Check if we have a too small buffer
+@@ -318,3 +319,46 @@ void InfoTests::testGetMechanismInfo()
+ 
+ 	CRYPTOKI_F_PTR( C_Finalize(NULL_PTR) );
+ }
++
++
++void InfoTests::testGetMechanismListConfig()
++{
++	CK_RV rv;
++	CK_ULONG ulMechCount = 0;
++	CK_MECHANISM_TYPE_PTR pMechanismList;
++
++#ifndef _WIN32
++    setenv("SOFTHSM2_CONF", "./softhsm2-mech.conf", 1);
++#else
++    setenv("SOFTHSM2_CONF", ".\\softhsm2-mech.conf", 1);
++#endif
++
++	// Just make sure that we finalize any previous failed tests
++	CRYPTOKI_F_PTR( C_Finalize(NULL_PTR) );
++
++	rv = CRYPTOKI_F_PTR( C_GetMechanismList(m_initializedTokenSlotID, NULL_PTR, &ulMechCount) );
++	CPPUNIT_ASSERT(rv == CKR_CRYPTOKI_NOT_INITIALIZED);
++
++	rv = CRYPTOKI_F_PTR( C_Initialize(NULL_PTR) );
++	CPPUNIT_ASSERT(rv == CKR_OK);
++
++	// Get the size of the buffer
++	rv = CRYPTOKI_F_PTR( C_GetMechanismList(m_initializedTokenSlotID, NULL_PTR, &ulMechCount) );
++	CPPUNIT_ASSERT(rv == CKR_OK);
++	CPPUNIT_ASSERT_EQUAL((CK_ULONG)2, ulMechCount);
++	pMechanismList = (CK_MECHANISM_TYPE_PTR)malloc(ulMechCount * sizeof(CK_MECHANISM_TYPE_PTR));
++
++	// Get the mechanism list
++	rv = CRYPTOKI_F_PTR( C_GetMechanismList(m_initializedTokenSlotID, pMechanismList, &ulMechCount) );
++	CPPUNIT_ASSERT(rv == CKR_OK);
++	CPPUNIT_ASSERT(pMechanismList[0] == CKM_RSA_X_509);
++	CPPUNIT_ASSERT(pMechanismList[1] == CKM_RSA_PKCS);
++	free(pMechanismList);
++
++	CRYPTOKI_F_PTR( C_Finalize(NULL_PTR) );
++#ifndef _WIN32
++	setenv("SOFTHSM2_CONF", "./softhsm2.conf", 1);
++#else
++	setenv("SOFTHSM2_CONF", ".\\softhsm2.conf", 1);
++#endif
++}
+diff --git a/src/lib/test/InfoTests.h b/src/lib/test/InfoTests.h
+index 4acf770..3df2199 100644
+--- a/src/lib/test/InfoTests.h
++++ b/src/lib/test/InfoTests.h
+@@ -48,6 +48,7 @@ class InfoTests : public TestsNoPINInitBase
+ 	CPPUNIT_TEST(testGetMechanismList);
+ 	CPPUNIT_TEST(testGetMechanismInfo);
+ 	CPPUNIT_TEST(testGetSlotInfoAlt);
++	CPPUNIT_TEST(testGetMechanismListConfig);
+ 	CPPUNIT_TEST_SUITE_END();
+ 
+ public:
+@@ -59,6 +60,7 @@ public:
+ 	void testGetMechanismList();
+ 	void testGetMechanismInfo();
+ 	void testGetSlotInfoAlt();
++	void testGetMechanismListConfig();
+ };
+ 
+ #endif // !_SOFTHSM_V2_INFOTESTS_H
+diff --git a/src/lib/test/Makefile.am b/src/lib/test/Makefile.am
+index 77d4df5..0782111 100644
+--- a/src/lib/test/Makefile.am
++++ b/src/lib/test/Makefile.am
+@@ -37,5 +37,6 @@ TESTS = 			p11test
+ EXTRA_DIST =			$(srcdir)/CMakeLists.txt \
+ 				$(srcdir)/*.h \
+ 				$(srcdir)/softhsm2-alt.conf.win32 \
++				$(srcdir)/softhsm2-mech.conf.win32 \
+ 				$(srcdir)/softhsm2.conf.win32 \
+ 				$(srcdir)/tokens/dummy.in
+diff --git a/src/lib/test/ObjectTests.cpp b/src/lib/test/ObjectTests.cpp
+index cd6c676..9491ce1 100644
+--- a/src/lib/test/ObjectTests.cpp
++++ b/src/lib/test/ObjectTests.cpp
+@@ -689,6 +689,10 @@ void ObjectTests::testCreateObject()
+ 	CK_KEY_TYPE genKeyType = CKK_GENERIC_SECRET;
+ 	CK_BYTE keyPtr[128];
+ 	CK_ULONG keyLen = 128;
++	CK_MECHANISM_TYPE allowedMechs[] = {
++		CKM_RSA_PKCS_PSS,
++		CKM_SHA256_RSA_PKCS_PSS
++	};
+ 	CK_ATTRIBUTE attribs[] = {
+ 		{ CKA_EXTRACTABLE, &bFalse, sizeof(bFalse) },
+ 		{ CKA_CLASS, &secretClass, sizeof(secretClass) },
+@@ -696,16 +700,19 @@ void ObjectTests::testCreateObject()
+ 		{ CKA_TOKEN, &bFalse, sizeof(bFalse) },
+ 		{ CKA_PRIVATE, &bTrue, sizeof(bTrue) },
+ 		{ CKA_SENSITIVE, &bTrue, sizeof(bTrue) },
+-		{ CKA_VALUE, keyPtr, keyLen }
++		{ CKA_VALUE, keyPtr, keyLen },
++		{ CKA_ALLOWED_MECHANISMS, &allowedMechs, sizeof(allowedMechs) }
+ 	};
+ 
+ 	CK_BBOOL local;
+ 	CK_BBOOL always;
+ 	CK_BBOOL never;
++	CK_MECHANISM_TYPE mechs[2] = {};
+ 	CK_ATTRIBUTE getTemplate[] = {
+ 		{ CKA_LOCAL, &local, sizeof(local) },
+ 		{ CKA_ALWAYS_SENSITIVE, &always, sizeof(always) },
+-		{ CKA_NEVER_EXTRACTABLE, &never, sizeof(never) }
++		{ CKA_NEVER_EXTRACTABLE, &never, sizeof(never) },
++		{ CKA_ALLOWED_MECHANISMS, &mechs, sizeof(mechs) }
+ 	};
+ 
+ 	// Just make sure that we finalize any previous tests
+@@ -894,11 +901,13 @@ void ObjectTests::testCreateObject()
+ 	CPPUNIT_ASSERT(rv == CKR_OK);
+ 
+ 	// Check value
+-	rv = CRYPTOKI_F_PTR( C_GetAttributeValue(hSession, hObject, getTemplate, 3) );
++	rv = CRYPTOKI_F_PTR( C_GetAttributeValue(hSession, hObject, getTemplate, 4) );
+ 	CPPUNIT_ASSERT(rv == CKR_OK);
+ 	CPPUNIT_ASSERT(local == CK_FALSE);
+ 	CPPUNIT_ASSERT(always == CK_FALSE);
+ 	CPPUNIT_ASSERT(never == CK_FALSE);
++	CPPUNIT_ASSERT(sizeof(allowedMechs) == getTemplate[3].ulValueLen);
++	CPPUNIT_ASSERT(memcmp(&allowedMechs, &mechs, sizeof(allowedMechs)) == 0);
+ 
+ 	// Destroy the secret object
+ 	rv = CRYPTOKI_F_PTR( C_DestroyObject(hSession,hObject) );
+diff --git a/src/lib/test/softhsm2-mech.conf.in b/src/lib/test/softhsm2-mech.conf.in
+new file mode 100644
+index 0000000..0e03906
+--- /dev/null
++++ b/src/lib/test/softhsm2-mech.conf.in
+@@ -0,0 +1,8 @@
++# SoftHSM v2 configuration file
++
++directories.tokendir = @builddir@/tokens
++objectstore.backend = file
++log.level = INFO
++slots.removable = false
++token.mechanisms = CKM_RSA_X_509,CKM_RSA_PKCS
++
+diff --git a/src/lib/test/softhsm2-mech.conf.win32 b/src/lib/test/softhsm2-mech.conf.win32
+new file mode 100644
+index 0000000..bd44d4a
+--- /dev/null
++++ b/src/lib/test/softhsm2-mech.conf.win32
+@@ -0,0 +1,7 @@
++# SoftHSM v2 configuration file
++
++directories.tokendir = .\tokens
++objectstore.backend = file
++log.level = INFO
++slots.removable = false
++token.mechanisms = CKM_RSA_X_509,CKM_RSA_PKCS
+diff --git a/win32/p11test/p11test.vcxproj.in b/win32/p11test/p11test.vcxproj.in
+index c8a493c..19e229c 100644
+--- a/win32/p11test/p11test.vcxproj.in
++++ b/win32/p11test/p11test.vcxproj.in
+@@ -65,6 +65,7 @@
+       <Command>
+ copy ..\..\src\lib\test\softhsm2.conf.win32 "$(TargetDir)\softhsm2.conf"
+ copy ..\..\src\lib\test\softhsm2-alt.conf.win32 "$(TargetDir)\softhsm2-alt.conf"
++copy ..\..\src\lib\test\softhsm2-mech.conf.win32 "$(TargetDir)\softhsm2-mech.conf"
+ mkdir "$(TargetDir)\tokens" 2&gt; nul
+ copy ..\..\src\lib\test\tokens\dummy.in "$(TargetDir)\tokens\dummy"
+       </Command>
+@@ -95,6 +96,7 @@ copy ..\..\src\lib\test\tokens\dummy.in "$(TargetDir)\tokens\dummy"
+       <Command>
+ copy ..\..\src\lib\test\softhsm2.conf.win32 "$(TargetDir)\softhsm2.conf"
+ copy ..\..\src\lib\test\softhsm2-alt.conf.win32 "$(TargetDir)\softhsm2-alt.conf"
++copy ..\..\src\lib\test\softhsm2-mech.conf.win32 "$(TargetDir)\softhsm2-mech.conf"
+ mkdir "$(TargetDir)\tokens" 2&gt; nul
+ copy ..\..\src\lib\test\tokens\dummy.in "$(TargetDir)\tokens\dummy"
+       </Command>

@@ -1,0 +1,3 @@
+from Config import *
+# Documentation is in a required pcre2-devel package
+addFilter("pcre2-static.* no-documentation");

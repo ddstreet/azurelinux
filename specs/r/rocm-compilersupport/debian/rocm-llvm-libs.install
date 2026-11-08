@@ -1,0 +1,7 @@
+/usr/lib/rocm
+/usr/lib/rocm/llvm
+/usr/lib/rocm/llvm/lib
+/usr/lib/rocm/llvm/lib/libLLVM-18.0.0git.so
+/usr/lib/rocm/llvm/lib/libLLVM-18git.so
+/usr/lib/rocm/llvm/lib/libLTO.so.18git
+/usr/lib/rocm/llvm/lib/libRemarks.so.18git

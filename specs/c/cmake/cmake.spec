@@ -72,7 +72,7 @@
 %global patch_version 11
 
 # For handling bump release by rpmdev-bumpspec and mass rebuild
-%global baserelease 1
+%global baserelease 2
 
 # Set to RC version if building RC, else comment out.
 #%%global rcsuf rc3
@@ -603,6 +603,9 @@ popd
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 3.31.11-2
+- Render component as lockless
+
 * Sun Mar 22 2026 Björn Esser <besser82@fedoraproject.org> - 3.31.11-1
 - cmake-3.31.11
 

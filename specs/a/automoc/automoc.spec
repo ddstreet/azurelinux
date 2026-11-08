@@ -10,7 +10,7 @@
 
 Name:           automoc
 Version:        1.0
-Release:        0.51.%{?beta_tag}%{?dist}
+Release:        0.52.%{?beta_tag}%{?dist}
 Summary:        Automatic moc for Qt 4
 License:        BSD-2-Clause
 URL:            http://www.kde.org
@@ -91,6 +91,9 @@ make install DESTDIR=%{buildroot} -C %{_target_platform}
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.0-0.52.rc3
+- Render component as lockless
+
 * Fri Jan 30 2026 Than Ngo <than@redhat.com> - 1.0-0.51.rc3
 - Update License
 

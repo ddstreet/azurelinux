@@ -6,7 +6,7 @@
 # NOTE: To avoid NVR clashes of nspr* packages:
 # - reset %%{nspr_release} to 1, when updating %%{nspr_version}
 # - increment %%{nspr_version}, when updating the NSS part only
-%global baserelease 1
+%global baserelease 2
 %global nss_release %baserelease
 # use "%%global nspr_release %%[%%baserelease+n]" to handle offsets when
 # release number between nss and nspr are different.
@@ -1100,6 +1100,9 @@ fi
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 3.130.0-2
+- Render component as lockless
+
 * Thu Oct  1 2026 Krenželok František <fkrenzel@redhat.com> - 3.130.0-1
 - Update NSS to 3.130.0
 

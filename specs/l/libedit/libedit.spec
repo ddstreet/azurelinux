@@ -9,7 +9,7 @@
 Summary:	The NetBSD Editline library
 Name:		libedit
 Version:	3.1
-Release:	58.%{snap}cvs%{?dist}
+Release:	59.%{snap}cvs%{?dist}
 
 # The project as a whole is BSD-3-Clause.
 # These files are BSD-2-Clause:
@@ -89,6 +89,9 @@ sed -i "s/lncurses/ltinfo/" configure
 %{_includedir}/editline/readline.h
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 3.1-59.20260512cvs
+- Render component as lockless
+
 * Tue May 12 2026 Jerry James  <loganjerry@gmail.com> - 3.1-59.20260512cvs
 - New version (20260512-3.1)
 

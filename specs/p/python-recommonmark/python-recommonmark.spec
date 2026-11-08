@@ -10,7 +10,7 @@ Documentation is available on Read the Docs: http://recommonmark.readthedocs.org
 
 Name:           python-recommonmark
 Version:        0.7.1
-Release:        16.git%{?dist}
+Release:        17.git%{?dist}
 Summary:        %{sum}
 
 License:        MIT
@@ -78,6 +78,9 @@ popd  # Leave buildroot bindir
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 0.7.1-17.git
+- Render component as lockless
+
 * Fri Sep 19 2025 Python Maint <python-maint@redhat.com> - 0.7.1-16.git
 - Rebuilt for Python 3.14.0rc3 bytecode
 

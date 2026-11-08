@@ -1,0 +1,18 @@
+summary: centos stream tests for galera
+
+environment:
+  BUILD_PACKAGE: mariadb10.11-server
+
+prepare:
+  how: shell
+  script: |
+    dnf install -y mariadb-server-galera wireshark-cli
+
+discover:
+  how: fmf
+  url: https://gitlab.com/redhat/centos-stream/tests/mariadb/
+  ref: main
+  filter: tag:galera&tag:single-host
+
+execute:
+  how: tmt

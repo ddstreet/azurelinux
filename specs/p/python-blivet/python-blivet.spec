@@ -8,7 +8,7 @@ Version: 3.12.1
 
 #%%global prerelease .b2
 # prerelease, if defined, should be something like .a1, .b1, .b2.dev1, or .c2
-Release: 10%{?prerelease}%{?dist}
+Release: 11%{?prerelease}%{?dist}
 Epoch: 1
 License: LGPL-2.1-or-later
 %global realname blivet
@@ -147,6 +147,9 @@ make DESTDIR=%{buildroot} install
 %{python3_sitelib}/%{realname}-%{version}-py%{python3_version}.egg-info/
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1:3.12.1-11
+- Render component as lockless
+
 * Tue Oct 14 2025 Adam Williamson <awilliam@redhat.com> - 1:3.12.1-9
 - Backport PR #1423 to fix anaconda rescue mounts (#2402976)
 

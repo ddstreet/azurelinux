@@ -28,7 +28,7 @@
 
 Name: %{shortname}-base
 Version: %{source_date}
-Release: 99%{?dist}
+Release: 100%{?dist}
 Epoch: 11
 Summary: TeX formatting system
 # The only files in the base package are directories, cache, and license texts
@@ -11127,6 +11127,9 @@ yes | %{_bindir}/updmap-sys --quiet --syncwithtrees >/dev/null 2>&1 || :
 %doc %{_texdir}/texmf-dist/doc/latex/yplan/
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 11:20230311-100
+- Render component as lockless
+
 * Wed Apr  1 2026 Tom Callaway <spot@fedoraproject.org> - 11:20230311-95.1
 - fix malformed patch to texdef breaking it (bz2453591)
 

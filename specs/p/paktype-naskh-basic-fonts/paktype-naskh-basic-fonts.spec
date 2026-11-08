@@ -5,7 +5,7 @@
 %global release_date 20231228
 
 Version:       7.0
-Release:       3.%{release_date}%{?dist}
+Release:       4.%{release_date}%{?dist}
 URL:           https://sourceforge.net/projects/paktype/
 
 %global foundry           paktype
@@ -51,6 +51,9 @@ chmod 644 PakTypeNaskhBasicFeatures.pdf
 %fontfiles
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 7.0-4.20231228
+- Render component as lockless
+
 * Thu Jul 24 2025 Fedora Release Engineering <releng@fedoraproject.org> - 7.0-3.20231228
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 

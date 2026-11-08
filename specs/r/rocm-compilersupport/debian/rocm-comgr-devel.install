@@ -1,0 +1,8 @@
+/usr/include/amd_comgr
+/usr/include/amd_comgr/amd_comgr.h
+/usr/lib/cmake/amd_comgr
+/usr/lib/cmake/amd_comgr/amd_comgr-config-version.cmake
+/usr/lib/cmake/amd_comgr/amd_comgr-config.cmake
+/usr/lib/cmake/amd_comgr/amd_comgr-targets-release.cmake
+/usr/lib/cmake/amd_comgr/amd_comgr-targets.cmake
+/usr/lib/libamd_comgr.so

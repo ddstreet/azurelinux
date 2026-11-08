@@ -7,7 +7,7 @@
 Name:           civetweb
 Summary:        Embedded C/C++ web server
 Version:        1.16
-Release:        16%{?dev:%{dev}}%{?dist}
+Release:        17%{?dev:%{dev}}%{?dist}
 License:        MIT
 Url:            https://github.com/civetweb/civetweb
 Source:         https://github.com/%{name}/%{name}/archive/v%{version}/%{name}-%{version}.tar.gz
@@ -106,6 +106,9 @@ ${CC:-gcc} ${CFLAGS:-} ${LDFLAGS:-} unittest/cgi_test.c -o output/cgi_test.cgi
 %{_datadir}/pkgconfig/*
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.16-17
+- Render component as lockless
+
 * Thu Aug 20 2026 Mattias Ellert <mattias.ellert@physics.uu.se> - 1.16-16
 - Link to openssl libraries instead of using runtime dynamic loading
 - Use openssl 3.0 API instead of the default openssl 1.1 API

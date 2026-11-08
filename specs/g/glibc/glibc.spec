@@ -155,7 +155,7 @@ Version: %{glibcversion}
 # - It allows using the Release number without the %%dist tag in the dependency
 #   generator to make the generated requires interchangeable between Rawhide
 #   and ELN (.elnYY < .fcXX).
-%global baserelease 18
+%global baserelease 19
 Release: %{baserelease}%{?dist}
 
 # Licenses:
@@ -2392,6 +2392,9 @@ update_gconv_modules_cache ()
 %endif
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 2.42-19
+- Render component as lockless
+
 * Tue Nov 03 2026 Dan Streetman <ddstreet@ieee.org> - 2.42-18
 - Use Azure Linux sysroot package names and paths.
 

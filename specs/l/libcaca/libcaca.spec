@@ -22,7 +22,7 @@
 Summary: Library for Colour AsCii Art, text mode graphics
 Name: libcaca
 Version: 0.99
-Release: 0.80.%{beta}%{?dist}
+Release: 0.81.%{beta}%{?dist}
 License: WTFPL
 URL: http://caca.zoy.org/wiki/libcaca
 
@@ -205,6 +205,9 @@ mv %{buildroot}%{_docdir}/libcaca-dev libcaca-dev-docs
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 0.99-0.81.beta20
+- Render component as lockless
+
 * Fri Sep 19 2025 Python Maint <python-maint@redhat.com> - 0.99-0.80.beta20
 - Rebuilt for Python 3.14.0rc3 bytecode
 

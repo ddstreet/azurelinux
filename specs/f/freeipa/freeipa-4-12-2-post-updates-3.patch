@@ -1,0 +1,4621 @@
+From 39e92c4033d0ecd702281f3ecbeac3b5f654e973 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Thu, 19 Jun 2025 17:17:44 +0200
+Subject: [PATCH 01/47] ipatests: fix test_adtrust_install_with_non_ipa_user
+
+Fix the test scenario:
+create a user with a second krbprincipalname but no
+krbcanonical name.
+kinit -E with the other name
+try ipa-adtrust-install with the other name
+It should fail with the error message 'user not found'
+
+Fixes: https://pagure.io/freeipa/issue/9812
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Alexander Bokovoy <abbra@users.noreply.github.com>
+---
+ .../test_integration/test_adtrust_install.py  | 48 ++++++++++++++-----
+ 1 file changed, 36 insertions(+), 12 deletions(-)
+
+diff --git a/ipatests/test_integration/test_adtrust_install.py b/ipatests/test_integration/test_adtrust_install.py
+index 99d302944..09e227ec8 100644
+--- a/ipatests/test_integration/test_adtrust_install.py
++++ b/ipatests/test_integration/test_adtrust_install.py
+@@ -360,27 +360,51 @@ class TestIpaAdTrustInstall(IntegrationTest):
+         assert msg in result.stdout_text
+         assert result.returncode == 0
+ 
+-    def test_adtrust_install_with_non_ipa_user(self):
++    @pytest.fixture
++    def create_user(self):
++        # create a user with 'othername' as 2nd krbprincipalname but
++        # no krbcanonicalname
++        basedn = self.master.domain.basedn
++        self.test_user = 'idmuser'
++        self.test_alias = 'othername'
++        tasks.create_active_user(
++            self.master, self.test_user, self.master.config.admin_password,
++            first=self.test_user, last=self.test_user)
++        user_update_ldif = textwrap.dedent("""
++            dn: uid={user},cn=users,cn=accounts,{base_dn}
++            changetype: modify
++            add: krbprincipalname
++            krbprincipalname: {alias}@{realm}
++            -
++            delete: krbcanonicalname
++            """.format(base_dn=basedn, user=self.test_user,
++                       alias=self.test_alias, realm=self.master.domain.realm))
++        tasks.ldapmodify_dm(self.master, user_update_ldif)
++        yield
++        tasks.kinit_admin(self.master)
++        self.master.run_command(["ipa", "user-del", self.test_user])
++
++    def test_adtrust_install_with_user_missing_krbcanonical(self, create_user):
+         """
+         Test that ipa-adtrust-install command returns
+-        an error when kinit is done as alias
+-        i.e root which is not an ipa user.
++        an error when kinit is done as an alias
++        for which there is no krbcanonicalname.
+         """
+-        msg = (
+-            'Unrecognized error during check of admin rights: '
+-            'root: user not found'
+-        )
+-        user = 'root'
++        self.master.run_command(["kdestroy", "-A"])
+         self.master.run_command(
+-            ["kinit", "-E", user],
+-            stdin_text=self.master.config.admin_password
+-        )
++            ["kinit", "-E", self.test_alias],
++            stdin_text=self.master.config.admin_password)
++
+         result = self.master.run_command(
+-            ["ipa-adtrust-install", "-A", user,
++            ["ipa-adtrust-install", "-A", self.test_alias,
+              "-a", self.master.config.admin_password,
+              "-U"], raiseonerr=False
+         )
+         assert result.returncode != 0
++        msg = (
++            'Unrecognized error during check of admin rights: '
++            '{alias}: user not found'
++        ).format(alias=self.test_alias)
+         assert msg in result.stderr_text
+ 
+     def test_adtrust_install_as_regular_ipa_user(self):
+-- 
+2.51.0
+
+
+From fba7aa10c8487116075d56c8dedeebefc40b74eb Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Mon, 16 Jun 2025 18:15:22 +0200
+Subject: [PATCH 02/47] ipa-idrange-fix: check that IPA server is installed
+
+If ipa-idrange-fix is called on a system where the server is not configured,
+it crashes with a Traceback when trying to access api.env.basedn.
+
+Check that IPA server is configured before processing further
+
+ipatests: add test launching ipa-idrange-fix on unconfigured server
+
+Fixes: https://pagure.io/freeipa/issue/9809
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: David Hanina <dhanina@redhat.com>
+---
+ ipaserver/install/ipa_idrange_fix.py                   |  3 +++
+ .../test_integration/test_cli_ipa_not_configured.py    | 10 ++++++++++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/ipaserver/install/ipa_idrange_fix.py b/ipaserver/install/ipa_idrange_fix.py
+index c6c67ae93..cd21ed428 100644
+--- a/ipaserver/install/ipa_idrange_fix.py
++++ b/ipaserver/install/ipa_idrange_fix.py
+@@ -10,6 +10,7 @@ from ipalib import api, errors
+ from ipapython.admintool import AdminTool
+ from ipapython.dn import DN
+ from ipapython import ipautil
++from ipaserver.install.installutils import check_server_configuration
+ from typing import List, Tuple
+ 
+ logger = logging.getLogger(__name__)
+@@ -169,6 +170,8 @@ for confirmation",
+         super().validate_options(needs_root)
+ 
+     def run(self):
++        check_server_configuration()
++
+         api.bootstrap(in_server=True)
+         api.finalize()
+ 
+diff --git a/ipatests/test_integration/test_cli_ipa_not_configured.py b/ipatests/test_integration/test_cli_ipa_not_configured.py
+index 1bf36d8ee..7c5601247 100644
+--- a/ipatests/test_integration/test_cli_ipa_not_configured.py
++++ b/ipatests/test_integration/test_cli_ipa_not_configured.py
+@@ -22,3 +22,13 @@ class TestIPANotConfigured(IntegrationTest):
+         assert (exp_str in cmd.stderr_text and
+                 cmd.returncode == SERVER_NOT_CONFIGURED and
+                 unexp_str not in cmd.stderr_text)
++
++    def test_ipa_idrange_fix(self):
++        """
++        Test for https://pagure.io/freeipa/issue/9809
++        Launch ipa-idrange-fix command when the server is not configured.
++        """
++        exp_str = "IPA is not configured"
++        cmd = self.master.run_command(["ipa-idrange-fix"], raiseonerr=False)
++        assert (exp_str in cmd.stderr_text
++                and cmd.returncode == SERVER_NOT_CONFIGURED)
+-- 
+2.51.0
+
+
+From 7301f00b4fcd1159f9c93fc109b95e0f0b71ffc4 Mon Sep 17 00:00:00 2001
+From: Rob Crittenden <rcritten@redhat.com>
+Date: Wed, 28 May 2025 11:23:06 -0400
+Subject: [PATCH 03/47] Add token options to immutables for pki override
+
+Setting the HSM options in a pki-override-file will
+result in a successful installation but it affects the
+storage of the token library path. It is stored as None.
+
+We could also instead save the provided value from the
+override but an override isn't necessary in this case
+since IPA provides command-line options to enable it.
+
+Signed-off-by: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+---
+ doc/designs/hsm.md                            |  3 +-
+ ipaserver/install/dogtaginstance.py           |  6 +++
+ .../test_pki_config_override.py               | 45 +++++++++++++++++++
+ 3 files changed, 53 insertions(+), 1 deletion(-)
+
+diff --git a/doc/designs/hsm.md b/doc/designs/hsm.md
+index 786f93e31..9e7557f47 100644
+--- a/doc/designs/hsm.md
++++ b/doc/designs/hsm.md
+@@ -32,7 +32,8 @@ Only RSA keys will be supported.
+ 
+ Using an HSM should be largely invisible to users and administrators beyond passing additional options during installation. The options required and any pre-installion work are HSM-specific.
+ 
+-It will not be possible to mix and match by default. PKI supports specifying the token values so a user can override these using --pki-config-override but it is, and will be, untested.
++It will not be possible to mix and match by default. IPA allows overriding some, but not all, of the PKI options. The following HSM-specific options are added to the not allowed list: pki_hsm_enable, pki_hsm_libfile, pki_hsm_modulename, pki_token_name, pki_token_password. IPA requires that its HSM command-line options are used.
++
+ 
+ There are a few basic rules:
+ 
+diff --git a/ipaserver/install/dogtaginstance.py b/ipaserver/install/dogtaginstance.py
+index d5796c75a..1f18d7fae 100644
+--- a/ipaserver/install/dogtaginstance.py
++++ b/ipaserver/install/dogtaginstance.py
+@@ -1042,6 +1042,12 @@ class PKIIniLoader:
+         'pki_clone_replication_clone_port',
+         'pki_clone_replicate_schema',
+         'pki_clone_uri',
++        # hsm
++        'pki_hsm_enable',
++        'pki_hsm_libfile',
++        'pki_hsm_modulename',
++        'pki_token_name',
++        'pki_token_password',
+         # cainstance
+         'pki_ds_secure_connection',
+         'pki_server_database_password',
+diff --git a/ipatests/test_integration/test_pki_config_override.py b/ipatests/test_integration/test_pki_config_override.py
+index d520b00c4..a7fd9296e 100644
+--- a/ipatests/test_integration/test_pki_config_override.py
++++ b/ipatests/test_integration/test_pki_config_override.py
+@@ -20,6 +20,25 @@ ipa_ca_key_algorithm=SHA512withRSA
+ ipa_ca_signing_algorithm=SHA512withRSA
+ """
+ 
++HSM_OVERRIDE = """
++[CA]
++pki_hsm_enable = True
++pki_hsm_libfile = /usr/lib64/pkcs11/libsofthsm2.so
++pki_hsm_modulename = libsofthsm2
++pki_token_name = ipa_token
++pki_token_password = Secret123
++"""
++
++
++def server_install_teardown(func):
++    def wrapped(*args):
++        master = args[0].master
++        try:
++            func(*args)
++        finally:
++            tasks.uninstall_master(master)
++    return wrapped
++
+ 
+ class TestPKIConfigOverride(IntegrationTest):
+     @classmethod
+@@ -40,3 +59,29 @@ class TestPKIConfigOverride(IntegrationTest):
+         cert = load_pem_x509_certificate(ca_pem)
+         assert cert.public_key().key_size == 4096
+         assert cert.signature_hash_algorithm.name == hashes.SHA512.name
++
++
++class TestPKIHSMConfigOverride(IntegrationTest):
++    num_replicas = 0
++
++    @classmethod
++    def install(cls, mh):
++        pass
++
++    @server_install_teardown
++    def test_immutable_options(self):
++        """Providing the immunible HSM options should fail"""
++        pki_ini = tasks.upload_temp_contents(self.master, HSM_OVERRIDE)
++        extra_args = [
++            '--pki-config-override', pki_ini,
++        ]
++        result = tasks.install_master(
++            self.master, setup_dns=False, extra_args=extra_args,
++            raiseonerr=False
++        )
++        self.master.run_command(['rm', '-f', pki_ini])
++        tasks.assert_error(
++            result,
++            'immutable options: pki_hsm_enable, pki_hsm_libfile, '
++            'pki_hsm_modulename, pki_token_name, pki_token_password'
++        )
+-- 
+2.51.0
+
+
+From ceaa1c9a244499534343dc667227e47a923212ee Mon Sep 17 00:00:00 2001
+From: Mark Reynolds <mreynolds@redhat.com>
+Date: Tue, 17 Jun 2025 12:50:36 -0400
+Subject: [PATCH 04/47] ipa-migrate - only remove repl state attribute options
+
+Improve how we process attributes that might include replication state
+data. Previously we only cared about ";binary" but there are other
+attribute options that are used in IPA. Now we completely break down the
+attribute into each option and rebuild it without any repl state options
+
+Fixes: https://pagure.io/freeipa/issue/9784
+
+Signed-off-by: Mark Reynolds <mreynolds@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipaserver/install/ipa_migrate.py           | 17 +++++++++--------
+ ipaserver/install/ipa_migrate_constants.py |  2 ++
+ 2 files changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/ipaserver/install/ipa_migrate.py b/ipaserver/install/ipa_migrate.py
+index a24a2ab7a..b26fb6685 100644
+--- a/ipaserver/install/ipa_migrate.py
++++ b/ipaserver/install/ipa_migrate.py
+@@ -33,7 +33,7 @@ from ipaserver.install.ipa_migrate_constants import (
+     DS_CONFIG, DB_OBJECTS, DS_INDEXES, BIND_DN, LOG_FILE_NAME,
+     STRIP_OP_ATTRS, STRIP_ATTRS, STRIP_OC, PROD_ATTRS,
+     DNA_REGEN_VAL, DNA_REGEN_ATTRS, NIS_PLUGIN, IGNORE_ATTRS,
+-    DB_EXCLUDE_TREES, POLICY_OP_ATTRS
++    DB_EXCLUDE_TREES, POLICY_OP_ATTRS, STATE_OPTIONS
+ )
+ 
+ """
+@@ -202,14 +202,15 @@ def decode_attr_vals(entry_attrs):
+     decoded_attrs = {}
+     for attr in entry_attrs:
+         vals = ensure_list_str(entry_attrs[attr])
+-        # Remove replication state data, but don't remove ";binary"
+-        # e.g.  userCertififccate;binary;adcsn=<CSN>
++        # Remove "only" replication state data, but don't remove other attr
++        # options like ";binary"
++        #    e.g.  userCertificate;binary;adcsn=<CSN>
+         parts = attr.split(";")
+-        if len(parts) > 1 and not attr.endswith(";binary"):
+-            if parts[1] == "binary":
+-                attr = parts[0] + ";binary"
+-            else:
+-                attr = parts[0]
++        attr_parts = [
++            parts[0]] + [p for p in parts[1:]
++                         if not any(p.startswith(opt)
++                                    for opt in STATE_OPTIONS)]
++        attr = (';').join(attr_parts)
+         decoded_attrs[attr] = vals
+     return decoded_attrs
+ 
+diff --git a/ipaserver/install/ipa_migrate_constants.py b/ipaserver/install/ipa_migrate_constants.py
+index 4beaa4f42..19cd51413 100644
+--- a/ipaserver/install/ipa_migrate_constants.py
++++ b/ipaserver/install/ipa_migrate_constants.py
+@@ -117,6 +117,8 @@ AD_TRUST_ATTRS = [  # ipaNTTrustedDomain objectclass
+     'ipantadditionalsuffixes',
+ ]
+ 
++STATE_OPTIONS = ('adcsn-', 'mdcsn-', 'vucsn-', 'vdcsn-')
++
+ DNA_REGEN_VAL = "-1"
+ 
+ DNA_REGEN_ATTRS = [
+-- 
+2.51.0
+
+
+From cafaed1c2119fb2e25209eefac74bc21ccab3dcb Mon Sep 17 00:00:00 2001
+From: Julien Rische <jrische@redhat.com>
+Date: Thu, 25 Jul 2024 19:35:33 +0200
+Subject: [PATCH 05/47] ipa-kdb: support storing multiple KVNO for the same
+ principal
+
+All MIT krb5 keys are encoded with an encryption type identifier and a
+KVNO (key version number). The KVNO is referring to the original
+credentials string (and its associated salt) which was used to generate
+the key using the derivation function of the associated encryption type.
+
+So far, when a set of Kerberos keys was provided to ipa-kdb, only the
+newest KVNO ones were saved in a single "krbPrincipalKey" LDAP
+attribute. All the older ones were deleted in the process.
+
+This commit allows to keep older keys by splitting them in multiple
+"krbPrincipalKey" attribute based on their KVNO.
+
+Fixes: https://pagure.io/freeipa/issue/9370
+Signed-off-by: Julien Rische <jrische@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ daemons/ipa-kdb/ipa_kdb_principals.c | 125 +++++++++++++++++++++++----
+ util/ipa_krb5.c                      |   7 ++
+ 2 files changed, 115 insertions(+), 17 deletions(-)
+
+diff --git a/daemons/ipa-kdb/ipa_kdb_principals.c b/daemons/ipa-kdb/ipa_kdb_principals.c
+index 114957b88..19998c2a3 100644
+--- a/daemons/ipa-kdb/ipa_kdb_principals.c
++++ b/daemons/ipa-kdb/ipa_kdb_principals.c
+@@ -22,6 +22,7 @@
+ 
+ #include "ipa_kdb.h"
+ #include "ipa_krb5.h"
++#include <stdlib.h>
+ #include <unicase.h>
+ 
+ /*
+@@ -279,22 +280,64 @@ done:
+ static int ipadb_ldap_attr_to_key_data(LDAP *lcontext, LDAPMessage *le,
+                                        char *attrname,
+                                        krb5_key_data **result, int *num,
+-                                       krb5_kvno *res_mkvno)
++                                       krb5_kvno *mkvno)
+ {
+-    struct berval **vals;
+-    int mkvno;
++    struct berval **vals, **p;
++    krb5_key_data *cur_res = NULL, *fin_res = NULL, *tmp_res;
++    int fin_mkvno = 0, cur_mkvno, cur_num, fin_num = 0;
+     int ret;
+ 
+     vals = ldap_get_values_len(lcontext, le, attrname);
+-    if (!vals) {
++    if (!vals)
+         return ENOENT;
++
++    for (p = vals; *p; ++p) {
++        ret = ber_decode_krb5_key_data(*p, &cur_mkvno, &cur_num, &cur_res);
++        if (ret)
++            goto end;
++
++        /* All keys in a principal entry should be encrypted with the same
++         * master key. */
++        if (fin_mkvno == 0) {
++            fin_mkvno = cur_mkvno;
++        } else if (cur_mkvno != fin_mkvno) {
++            ret = EINVAL;
++            goto end;
++        }
++
++        if (!fin_res) {
++            fin_res = cur_res;
++        } else {
++            tmp_res = realloc(fin_res, (fin_num + cur_num) * sizeof(*fin_res));
++            if (!tmp_res) {
++                ret = ENOMEM;
++                goto end;
++            } else {
++                fin_res = tmp_res;
++            }
++
++            memcpy(fin_res + fin_num, cur_res, cur_num * sizeof(*fin_res));
++            free(cur_res);
++        }
++
++        cur_res = NULL;
++        fin_num += cur_num;
+     }
+ 
+-    ret = ber_decode_krb5_key_data(vals[0], &mkvno, num, result);
+-    ldap_value_free_len(vals);
+-    if (ret == 0) {
+-        *res_mkvno = mkvno;
++    if (mkvno)
++        *mkvno = fin_mkvno;
++    if (num)
++        *num = fin_num;
++    if (result) {
++        *result = fin_res;
++    } else {
++        free(fin_res);
+     }
++
++end:
++    ldap_value_free_len(vals);
++    if (cur_res && fin_res != cur_res)
++        free(cur_res);
+     return ret;
+ }
+ 
+@@ -2532,15 +2575,26 @@ static krb5_error_code ipadb_get_mkvno_from_tl_data(krb5_tl_data *tl_data,
+     return 0;
+ }
+ 
++static int desc_key_data(const void *a, const void *b)
++{
++    const krb5_key_data *ka = a;
++    const krb5_key_data *kb = b;
++
++    return ka->key_data_kvno != kb->key_data_kvno
++        ? kb->key_data_kvno - ka->key_data_kvno
++        : kb->key_data_type[0] - ka->key_data_type[0];
++}
++
+ static krb5_error_code ipadb_get_ldap_mod_key_data(struct ipadb_mods *imods,
+                                                    krb5_key_data *key_data,
+                                                    int n_key_data, int mkvno,
+                                                    int mod_op)
+ {
+     krb5_error_code kerr;
+-    struct berval *bval = NULL;
++    krb5_key_data *kvno_kdata;
++    struct berval **bvals = NULL;
+     LDAPMod *mod;
+-    int ret;
++    int i, j, begin, n_kvno;
+ 
+     /* If the key data is empty, remove all keys. */
+     if (n_key_data == 0 || key_data == NULL) {
+@@ -2559,19 +2613,56 @@ static krb5_error_code ipadb_get_ldap_mod_key_data(struct ipadb_mods *imods,
+         return 0;
+     }
+ 
+-    ret = ber_encode_krb5_key_data(key_data, n_key_data, mkvno, &bval);
+-    if (ret != 0) {
+-        kerr = ret;
++    /* Copy key list. */
++    kvno_kdata = calloc(n_key_data, sizeof(*kvno_kdata));
++    if (!kvno_kdata)
++        return ENOMEM;
++
++    memcpy(kvno_kdata, key_data, n_key_data * sizeof(*kvno_kdata));
++
++    /* Make sure the key list is sorted by KVNO and enctype. */
++    qsort(kvno_kdata, n_key_data, sizeof(*kvno_kdata), desc_key_data);
++
++    /* Count number of distinct KVNOs. */
++    for (i = 1, n_kvno = 1; i < n_key_data; ++i) {
++        if (kvno_kdata[i - 1].key_data_kvno != kvno_kdata[i].key_data_kvno)
++            ++n_kvno;
++    }
++
++    bvals = calloc(n_kvno, sizeof(*bvals));
++    if (!bvals) {
++        kerr = ENOMEM;
+         goto done;
+     }
+ 
+-    kerr = ipadb_get_ldap_mod_bvalues(imods, "krbPrincipalKey",
+-                                      &bval, 1, mod_op);
++    /* Add a "krbPrincipalKey" attribute for each KVNO. */
++    for (i = 0, j = 0, begin = 0; i < n_key_data; ++i) {
++        if (kvno_kdata[begin].key_data_kvno != kvno_kdata[i].key_data_kvno) {
++            kerr = ber_encode_krb5_key_data(kvno_kdata + begin, i - begin,
++                                            mkvno, bvals + j);
++            if (kerr)
++                goto done;
++
++            begin = i;
++            ++j;
++        }
++    }
++
++    kerr = ber_encode_krb5_key_data(kvno_kdata + begin, i - begin, mkvno,
++                                    bvals + j);
++    if (kerr)
++        goto done;
++
++    kerr = ipadb_get_ldap_mod_bvalues(imods, "krbPrincipalKey", bvals, n_kvno,
++                                      mod_op);
+ 
+ done:
+-    if (kerr) {
+-        ber_bvfree(bval);
++    if (kerr && bvals) {
++        for (i = 0; i < n_kvno; ++i)
++            ber_bvfree(bvals[i]);
++        free(bvals);
+     }
++    free(kvno_kdata);
+     return kerr;
+ }
+ 
+diff --git a/util/ipa_krb5.c b/util/ipa_krb5.c
+index 0087e53e6..fbd4d57de 100644
+--- a/util/ipa_krb5.c
++++ b/util/ipa_krb5.c
+@@ -394,6 +394,13 @@ int ber_encode_krb5_key_data(krb5_key_data *data,
+ 
+     for (i = 0; i < numk; i++) {
+ 
++        /* All keys must have the same KVNO, because there is only one attribute
++         * for all of them. */
++        if (data[i].key_data_kvno != data[0].key_data_kvno) {
++            ret = EINVAL;
++            goto done;
++        }
++
+         ret = ber_printf(be, "{");
+         if (ret == -1) {
+             ret = EFAULT;
+-- 
+2.51.0
+
+
+From fb90a9492150d668003984345dcac874c4e26e61 Mon Sep 17 00:00:00 2001
+From: Julien Rische <jrische@redhat.com>
+Date: Wed, 12 Mar 2025 13:49:47 +0100
+Subject: [PATCH 06/47] Use ipaplatform tasks for krb5 enctypes
+
+Provide the master key encryption type and the list of supported
+encryption types as ipaplatform.<platform>.tasks methods. This allows
+to generate the list at runtime based on the environment (e.g. FIPS) and
+override the list depending of the platform.
+
+3DES HMAC-SHA1 encryption type is now removed from supported encryption
+types if it is present.
+
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ install/share/kerberos.ldif           | 18 +-----------------
+ install/updates/50-krbenctypes.update | 11 +----------
+ ipaplatform/base/tasks.py             | 25 +++++++++++++++++++++++++
+ ipaplatform/redhat/tasks.py           |  8 ++++++++
+ ipaserver/install/krbinstance.py      | 27 +++++++++++----------------
+ ipaserver/install/ldapupdate.py       | 17 ++++++++++++++++-
+ 6 files changed, 62 insertions(+), 44 deletions(-)
+
+diff --git a/install/share/kerberos.ldif b/install/share/kerberos.ldif
+index 3a5c30ec8..78c29923b 100644
+--- a/install/share/kerberos.ldif
++++ b/install/share/kerberos.ldif
+@@ -14,25 +14,9 @@ objectClass: krbrealmcontainer
+ objectClass: krbticketpolicyaux
+ krbSubTrees: $SUFFIX
+ krbSearchScope: 2
+-krbSupportedEncSaltTypes: aes256-cts:normal
+-krbSupportedEncSaltTypes: aes256-cts:special
+-krbSupportedEncSaltTypes: aes128-cts:normal
+-krbSupportedEncSaltTypes: aes128-cts:special
+-krbSupportedEncSaltTypes: aes128-sha2:normal
+-krbSupportedEncSaltTypes: aes128-sha2:special
+-krbSupportedEncSaltTypes: aes256-sha2:normal
+-krbSupportedEncSaltTypes: aes256-sha2:special
+-${FIPS}krbSupportedEncSaltTypes: camellia128-cts-cmac:normal
+-${FIPS}krbSupportedEncSaltTypes: camellia128-cts-cmac:special
+-${FIPS}krbSupportedEncSaltTypes: camellia256-cts-cmac:normal
+-${FIPS}krbSupportedEncSaltTypes: camellia256-cts-cmac:special
+ krbMaxTicketLife: 86400
+ krbMaxRenewableAge: 604800
+-krbDefaultEncSaltTypes: aes256-sha2:special
+-krbDefaultEncSaltTypes: aes128-sha2:special
+-krbDefaultEncSaltTypes: aes256-cts:special
+-krbDefaultEncSaltTypes: aes128-cts:special
+-
++${LDIF_SUPPORTED_ENCTYPES}${LDIF_DEFAULT_ENCTYPES}
+ # Default password Policy
+ dn: cn=global_policy,cn=$REALM,cn=kerberos,$SUFFIX
+ changetype: add
+diff --git a/install/updates/50-krbenctypes.update b/install/updates/50-krbenctypes.update
+index 1bf2bf33a..3061b98c9 100644
+--- a/install/updates/50-krbenctypes.update
++++ b/install/updates/50-krbenctypes.update
+@@ -1,11 +1,2 @@
+ dn: cn=$REALM,cn=kerberos,$SUFFIX
+-${FIPS}add: krbSupportedEncSaltTypes: camellia128-cts-cmac:normal
+-${FIPS}add: krbSupportedEncSaltTypes: camellia128-cts-cmac:special
+-${FIPS}add: krbSupportedEncSaltTypes: camellia256-cts-cmac:normal
+-${FIPS}add: krbSupportedEncSaltTypes: camellia256-cts-cmac:special
+-add: krbSupportedEncSaltTypes: aes128-sha2:normal
+-add: krbSupportedEncSaltTypes: aes128-sha2:special
+-add: krbSupportedEncSaltTypes: aes256-sha2:normal
+-add: krbSupportedEncSaltTypes: aes256-sha2:special
+-remove: krbDefaultEncSaltTypes: des3-hmac-sha1:special
+-remove: krbDefaultEncSaltTypes: arcfour-hmac:special
++${ADD_SUPPORTED_ENCTYPES}${ADD_DEFAULT_ENCTYPES}${REMOVE_SUPPORTED_ENCTYPES}${REMOVE_DEFAULT_ENCTYPES}
+diff --git a/ipaplatform/base/tasks.py b/ipaplatform/base/tasks.py
+index 4108a7ced..9e221d872 100644
+--- a/ipaplatform/base/tasks.py
++++ b/ipaplatform/base/tasks.py
+@@ -540,4 +540,29 @@ class BaseTaskNamespace:
+                 'ipa-client-automount-nsswitch', 'previous-automount'
+             )
+ 
++    def get_masterkey_enctype(self):
++        return 'aes256-sha2'
++
++    # Encryption types allowed for Kerberos keys
++    def get_supported_enctypes(self):
++        return ('aes256-sha2:special', 'aes128-sha2:special',
++                'aes256-sha2:normal', 'aes128-sha2:normal',
++                'aes256-cts:special', 'aes128-cts:special',
++                'aes256-cts:normal', 'aes128-cts:normal',
++                'camellia256-cts:special', 'camellia128-cts:special',
++                'camellia256-cts:normal', 'camellia128-cts:normal')
++
++    # Encryption types used in the past, not supported anymore
++    def get_removed_supported_enctypes(self):
++        return ('des3-hmac-sha1:special')
++
++    # Encryption types used by default when generating Kerberos keys
++    def get_default_enctypes(self):
++        return ('aes256-sha2:special', 'aes128-sha2:special',
++                'aes256-cts:special', 'aes128-cts:special')
++
++    # Encryption types no longer used by default when generating keys
++    def get_removed_default_enctypes(self):
++        return ('des3-hmac-sha1:special', 'arcfour-hmac:special')
++
+ tasks = BaseTaskNamespace()
+diff --git a/ipaplatform/redhat/tasks.py b/ipaplatform/redhat/tasks.py
+index 18203bf0e..4953dc78a 100644
+--- a/ipaplatform/redhat/tasks.py
++++ b/ipaplatform/redhat/tasks.py
+@@ -751,5 +751,13 @@ class RedHatTaskNamespace(BaseTaskNamespace):
+             logger.info("It may happen if the configuration was done "
+                         "using authconfig instead of authselect")
+ 
++    def get_supported_enctypes(self):
++        enctypes = super().get_supported_enctypes()
++
++        if not self.is_fips_enabled():
++            return enctypes
++
++        return tuple(e for e in enctypes if not e.startswith('camellia'))
++
+ 
+ tasks = RedHatTaskNamespace()
+diff --git a/ipaserver/install/krbinstance.py b/ipaserver/install/krbinstance.py
+index 9f0eea563..fb1a28842 100644
+--- a/ipaserver/install/krbinstance.py
++++ b/ipaserver/install/krbinstance.py
+@@ -55,14 +55,6 @@ from ipaplatform.paths import paths
+ 
+ logger = logging.getLogger(__name__)
+ 
+-MASTER_KEY_TYPE = 'aes256-sha2'
+-SUPPORTED_ENCTYPES = ('aes256-sha2:special', 'aes128-sha2:special',
+-                      'aes256-sha2:normal', 'aes128-sha2:normal',
+-                      'aes256-cts:special', 'aes128-cts:special',
+-                      'aes256-cts:normal', 'aes128-cts:normal',
+-                      'camellia256-cts:special', 'camellia128-cts:special',
+-                      'camellia256-cts:normal', 'camellia128-cts:normal')
+-
+ 
+ def get_pkinit_request_ca():
+     """
+@@ -299,15 +291,18 @@ class KrbInstance(service.Service):
+                              INCLUDES=includes,
+                              FIPS='#' if fips_enabled else '')
+ 
+-        if fips_enabled:
+-            supported_enctypes = list(
+-                filter(lambda e: not e.startswith('camellia'),
+-                       SUPPORTED_ENCTYPES))
+-        else:
+-            supported_enctypes = SUPPORTED_ENCTYPES
+-        self.sub_dict['SUPPORTED_ENCTYPES'] = ' '.join(supported_enctypes)
++        supported_enctypes = tasks.get_supported_enctypes()
++        str_supported_enctypes = ' '.join(supported_enctypes)
++        ldif_supported_enctypes = ''.join(f'krbSupportedEncSaltTypes: {e}\n'
++                                          for e in supported_enctypes)
++        ldif_default_enctypes = ''.join(f'krbDefaultEncSaltTypes: {e}\n'
++                                        for e in tasks.get_default_enctypes())
++
++        self.sub_dict['SUPPORTED_ENCTYPES'] = str_supported_enctypes
++        self.sub_dict['LDIF_SUPPORTED_ENCTYPES'] = ldif_supported_enctypes
++        self.sub_dict['LDIF_DEFAULT_ENCTYPES'] = ldif_default_enctypes
+ 
+-        self.sub_dict['MASTER_KEY_TYPE'] = MASTER_KEY_TYPE
++        self.sub_dict['MASTER_KEY_TYPE'] = tasks.get_masterkey_enctype()
+ 
+         # IPA server/KDC is not a subdomain of default domain
+         # Proper domain-realm mapping needs to be specified
+diff --git a/ipaserver/install/ldapupdate.py b/ipaserver/install/ldapupdate.py
+index c3b59732a..9a1a1167e 100644
+--- a/ipaserver/install/ldapupdate.py
++++ b/ipaserver/install/ldapupdate.py
+@@ -54,6 +54,9 @@ UPDATES_DIR=paths.UPDATES_DIR
+ UPDATE_SEARCH_TIME_LIMIT = 30  # seconds
+ 
+ 
++def ldif_mod(op, attr, values):
++    return ''.join(f'{op}: {attr}: {v}\n' for v in values)
++
+ def get_sub_dict(realm, domain, suffix, fqdn, idstart=None, idmax=None):
+     """LDAP template substitution dict for installer and updater
+     """
+@@ -73,6 +76,15 @@ def get_sub_dict(realm, domain, suffix, fqdn, idstart=None, idmax=None):
+         named_uid = None
+         named_gid = None
+ 
++    add_supported_enctypes = ldif_mod('add', 'krbSupportedEncSaltTypes',
++                                      tasks.get_supported_enctypes())
++    add_default_enctypes = ldif_mod('add', 'krbDefaultEncSaltTypes',
++                                    tasks.get_default_enctypes())
++    rm_supported_enctypes = ldif_mod('remove', 'krbSupportedEncSaltTypes',
++                                     tasks.get_removed_supported_enctypes())
++    rm_default_enctypes = ldif_mod('remove', 'krbDefaultEncSaltTypes',
++                                   tasks.get_removed_default_enctypes())
++
+     return dict(
+         REALM=realm,
+         DOMAIN=domain,
+@@ -82,7 +94,10 @@ def get_sub_dict(realm, domain, suffix, fqdn, idstart=None, idmax=None):
+         HOST=fqdn,
+         LIBARCH=paths.LIBARCH,
+         TIME=int(time.time()),
+-        FIPS="#" if tasks.is_fips_enabled() else "",
++        ADD_SUPPORTED_ENCTYPES=add_supported_enctypes,
++        ADD_DEFAULT_ENCTYPES=add_default_enctypes,
++        REMOVE_SUPPORTED_ENCTYPES=rm_supported_enctypes,
++        REMOVE_DEFAULT_ENCTYPES=rm_default_enctypes,
+         # idstart, idmax, and idrange_size may be None
+         IDSTART=idstart,
+         IDMAX=idmax,
+-- 
+2.51.0
+
+
+From b69616ed48224b48b5615044314787f69af13c13 Mon Sep 17 00:00:00 2001
+From: Julien Rische <jrische@redhat.com>
+Date: Wed, 12 Mar 2025 13:50:46 +0100
+Subject: [PATCH 07/47] Add test for master key upgrade
+
+Since commit 4ed7da378940198cf4415f86d4eb013de6ac6455 in MIT krb5,
+kdb5_util sets the required bits on the modification mask of updated
+principal entries to enable ipa-kdb to switch the active master key.
+
+This commit creates a "test_fedora_legacy" ipaplatform where the AES
+HMAC-SHA2 encryption types are not enabled. "test_mkey_upgrade" uses
+this platform to initialize a domain with an aes256-cts-hmac-sha1-96
+master key, and test its upgrade to aes256-cts-hmac-sha384-192.
+
+Some parts of the test infrastructure had to be made aware of this new
+platform (e.g. firewall integration).
+
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipaplatform/setup.py                          |   1 +
+ ipaplatform/test_fedora_legacy/__init__.py    |   7 +
+ ipaplatform/test_fedora_legacy/constants.py   |  16 +++
+ ipaplatform/test_fedora_legacy/paths.py       |  13 ++
+ ipaplatform/test_fedora_legacy/services.py    |  27 ++++
+ ipaplatform/test_fedora_legacy/tasks.py       |  35 +++++
+ ipatests/pytest_ipa/integration/firewall.py   |   1 +
+ .../test_integration/test_mkey_upgrade.py     | 135 ++++++++++++++++++
+ 8 files changed, 235 insertions(+)
+ create mode 100644 ipaplatform/test_fedora_legacy/__init__.py
+ create mode 100644 ipaplatform/test_fedora_legacy/constants.py
+ create mode 100644 ipaplatform/test_fedora_legacy/paths.py
+ create mode 100644 ipaplatform/test_fedora_legacy/services.py
+ create mode 100644 ipaplatform/test_fedora_legacy/tasks.py
+ create mode 100644 ipatests/test_integration/test_mkey_upgrade.py
+
+diff --git a/ipaplatform/setup.py b/ipaplatform/setup.py
+index 086a99d1f..1d6df1eff 100644
+--- a/ipaplatform/setup.py
++++ b/ipaplatform/setup.py
+@@ -42,6 +42,7 @@ if __name__ == '__main__':
+             "ipaplatform.rhel",
+             "ipaplatform.rhel_container",
+             "ipaplatform.suse",
++            "ipaplatform.test_fedora_legacy",
+             "ipaplatform.opencloudos",
+             "ipaplatform.tencentos"
+         ],
+diff --git a/ipaplatform/test_fedora_legacy/__init__.py b/ipaplatform/test_fedora_legacy/__init__.py
+new file mode 100644
+index 000000000..a4f4cff5a
+--- /dev/null
++++ b/ipaplatform/test_fedora_legacy/__init__.py
+@@ -0,0 +1,7 @@
++#
++# Copyright (C) 2025  FreeIPA Contributors see COPYING for license
++#
++"""
++This module contains Fedora AES HMAC-SHA1 master key specific platform files.
++"""
++NAME = 'test_fedora_legacy'
+diff --git a/ipaplatform/test_fedora_legacy/constants.py b/ipaplatform/test_fedora_legacy/constants.py
+new file mode 100644
+index 000000000..0cebac86a
+--- /dev/null
++++ b/ipaplatform/test_fedora_legacy/constants.py
+@@ -0,0 +1,16 @@
++#
++# Copyright (C) 2025  FreeIPA Contributors see COPYING for license
++#
++"""Fedora AES HMAC-SHA1 master key constants
++"""
++from ipaplatform.fedora.constants import FedoraConstantsNamespace, User, Group
++
++
++__all__ = ("constants", "User", "Group")
++
++
++class TestFedoraLegacyConstantsNamespace(FedoraConstantsNamespace):
++    pass
++
++
++constants = TestFedoraLegacyConstantsNamespace()
+diff --git a/ipaplatform/test_fedora_legacy/paths.py b/ipaplatform/test_fedora_legacy/paths.py
+new file mode 100644
+index 000000000..71fb8acdc
+--- /dev/null
++++ b/ipaplatform/test_fedora_legacy/paths.py
+@@ -0,0 +1,13 @@
++#
++# Copyright (C) 2025  FreeIPA Contributors see COPYING for license
++#
++"""Fedora AES HMAC-SHA1 master key paths
++"""
++from ipaplatform.fedora.paths import FedoraPathNamespace
++
++
++class TestFedoraLegacyPathNamespace(FedoraPathNamespace):
++    pass
++
++
++paths = TestFedoraLegacyPathNamespace()
+diff --git a/ipaplatform/test_fedora_legacy/services.py b/ipaplatform/test_fedora_legacy/services.py
+new file mode 100644
+index 000000000..adbe21f82
+--- /dev/null
++++ b/ipaplatform/test_fedora_legacy/services.py
+@@ -0,0 +1,27 @@
++#
++# Copyright (C) 2025  FreeIPA Contributors see COPYING for license
++#
++"""Fedora AES HMAC-SHA1 master key services
++"""
++from ipaplatform.fedora import services as fedora_services
++
++
++test_fedora_legacy_system_units = fedora_services.fedora_system_units.copy()
++
++
++class TestFedoraLegacyService(fedora_services.FedoraService):
++    system_units = test_fedora_legacy_system_units
++
++
++def test_fedora_legacy_service_class_factory(name, api=None):
++    return fedora_services.fedora_service_class_factory(name, api)
++
++
++class TestFedoraLegacyServices(fedora_services.FedoraServices):
++    def service_class_factory(self, name, api=None):
++        return test_fedora_legacy_service_class_factory(name, api)
++
++
++timedate_services = fedora_services.timedate_services
++service = test_fedora_legacy_service_class_factory
++knownservices = TestFedoraLegacyServices()
+diff --git a/ipaplatform/test_fedora_legacy/tasks.py b/ipaplatform/test_fedora_legacy/tasks.py
+new file mode 100644
+index 000000000..e6e72d723
+--- /dev/null
++++ b/ipaplatform/test_fedora_legacy/tasks.py
+@@ -0,0 +1,35 @@
++#
++# Copyright (C) 2025  FreeIPA Contributors see COPYING for license
++#
++"""Fedora AES HMAC-SHA1 master key tasks
++"""
++from ipaplatform.fedora.tasks import FedoraTaskNamespace
++
++from re import compile
++
++
++def add_aes_sha1(enctypes):
++    return tuple({*enctypes,
++                  'aes256-cts:special', 'aes128-cts:special',
++                  'aes256-cts:normal', 'aes128-cts:normal'})
++
++
++class TestFedoraLegacyTaskNamespace(FedoraTaskNamespace):
++
++    def get_masterkey_enctype(self):
++        return 'aes256-cts'
++
++    def get_supported_enctypes(self):
++        aes_sha2_pattern = compile('^aes[0-9]+-sha2:')
++
++        return tuple(e for e in super().get_supported_enctypes()
++                     if not aes_sha2_pattern.match(e))
++
++    def get_removed_supported_enctypes(self):
++        return add_aes_sha1(super().get_removed_supported_enctypes())
++
++    def get_removed_default_enctypes(self):
++        return add_aes_sha1(super().get_removed_default_enctypes())
++
++
++tasks = TestFedoraLegacyTaskNamespace()
+diff --git a/ipatests/pytest_ipa/integration/firewall.py b/ipatests/pytest_ipa/integration/firewall.py
+index 1a5af5c5e..01661b6c6 100644
+--- a/ipatests/pytest_ipa/integration/firewall.py
++++ b/ipatests/pytest_ipa/integration/firewall.py
+@@ -239,6 +239,7 @@ class Firewall(FirewallBase):
+         firewalls = {
+             'rhel': FirewallD,
+             'fedora': FirewallD,
++            'test_fedora_legacy': FirewallD,
+             'debian': FirewallD,
+             'ubuntu': FirewallD,
+             'altlinux': NoOpFirewall,
+diff --git a/ipatests/test_integration/test_mkey_upgrade.py b/ipatests/test_integration/test_mkey_upgrade.py
+new file mode 100644
+index 000000000..933623fbf
+--- /dev/null
++++ b/ipatests/test_integration/test_mkey_upgrade.py
+@@ -0,0 +1,135 @@
++#
++# Copyright (C) 2015  FreeIPA Contributors see COPYING for license
++#
++
++import re
++import textwrap
++
++from ipatests.pytest_ipa.integration import tasks
++from ipatests.test_integration.base import IntegrationTest
++
++
++class TestMkeyUpgrade(IntegrationTest):
++
++    num_replicas = 1
++    topology = 'line'
++
++    @classmethod
++    def install(cls, mh):
++        cls.master.put_file_contents(
++            '/etc/profile.d/ipaplatform.sh',
++            'export IPAPLATFORM_OVERRIDE=test_fedora_legacy')
++        cls.master.run_command(['mkdir', '/etc/systemd/system/ipa.service.d'])
++        cls.master.put_file_contents(
++            '/etc/systemd/system/ipa.service.d/platform.conf',
++            '[Service]\n'
++            'Environment="IPAPLATFORM_OVERRIDE=test_fedora_legacy"')
++        cls.master.run_command(['systemctl', 'daemon-reload'])
++        tasks.install_master(cls.master, setup_dns=False)
++        tasks.install_replica(cls.master, cls.replicas[0], setup_dns=False)
++
++    def test_old_active_mkey(self):
++        p = re.compile('^KVNO: 1, Enctype: aes256-cts-hmac-sha1-96, .+ \\*$',
++                       flags=re.MULTILINE)
++
++        result = self.master.run_command(['kdb5_util', 'list_mkeys'])
++        assert p.search(result.stdout_text)
++        result = self.replicas[0].run_command(['kdb5_util', 'list_mkeys'])
++        assert p.search(result.stdout_text)
++
++    def test_enable_new_entypes(self):
++        base_dn = "dc=%s" % (",dc=".join(self.master.domain.name.split(".")))
++        realm = self.master.domain.name.upper()
++
++        entry_ldif = textwrap.dedent("""
++            dn: cn={realm},cn=kerberos,{base_dn}
++            changetype: modify
++            replace: krbSupportedEncSaltTypes
++            krbSupportedEncSaltTypes: aes128-sha2:normal
++            krbSupportedEncSaltTypes: aes128-sha2:special
++            krbSupportedEncSaltTypes: aes256-sha2:normal
++            krbSupportedEncSaltTypes: aes256-sha2:special
++            krbSupportedEncSaltTypes: aes256-cts:normal
++            krbSupportedEncSaltTypes: aes256-cts:special
++            krbSupportedEncSaltTypes: aes128-cts:normal
++            krbSupportedEncSaltTypes: aes128-cts:special
++            krbSupportedEncSaltTypes: camellia128-cts-cmac:normal
++            krbSupportedEncSaltTypes: camellia128-cts-cmac:special
++            krbSupportedEncSaltTypes: camellia256-cts-cmac:normal
++            krbSupportedEncSaltTypes: camellia256-cts-cmac:special
++            -
++            replace: krbDefaultEncSaltTypes
++            krbDefaultEncSaltTypes: aes256-sha2:special
++            krbDefaultEncSaltTypes: aes128-sha2:special
++            krbDefaultEncSaltTypes: aes256-cts:special
++            krbDefaultEncSaltTypes: aes128-cts:special""").format(
++            base_dn=base_dn, realm=realm)
++        tasks.ldapmodify_dm(self.master, entry_ldif)
++
++    def test_add_new_mkey(self):
++        self.master.run_command('kdb5_util add_mkey -e aes256-sha2 -s',
++                                stdin_text='Secret123\nSecret123')
++
++    def test_new_inactive_mkey(self):
++        p = re.compile('^KVNO: 2, Enctype: aes256-cts-hmac-sha384-192, ',
++                       flags=re.MULTILINE)
++
++        result = self.master.run_command(['kdb5_util', 'list_mkeys'])
++        assert p.search(result.stdout_text)
++        result = self.replicas[0].run_command(['kdb5_util', 'list_mkeys'])
++        assert p.search(result.stdout_text)
++
++    def test_switch_mkey(self):
++        self.master.run_command(['kdb5_util', 'use_mkey', '2'])
++
++    def test_new_active_mkey(self):
++        p = re.compile('^KVNO: 2, Enctype: aes256-cts-hmac-sha384-192, .+ \\*$',
++                       flags=re.MULTILINE)
++
++        result = self.master.run_command(['kdb5_util', 'list_mkeys'])
++        assert p.search(result.stdout_text)
++        result = self.replicas[0].run_command(['kdb5_util', 'list_mkeys'])
++        assert p.search(result.stdout_text)
++
++    def test_used_old_mkey(self):
++        p = re.compile('^MKey: vno 1$', flags=re.MULTILINE)
++
++        result = self.master.run_command(['kadmin.local', 'getprinc',
++                                          f'ldap/{self.master.hostname}'])
++        assert p.search(result.stdout_text)
++        result = self.replicas[0].run_command(['kadmin.local', 'getprinc',
++                                               f'ldap/{self.master.hostname}'])
++        assert p.search(result.stdout_text)
++
++    def test_reencrypt_with_new_mkey(self):
++        self.master.run_command(['kdb5_util', '-x', 'unlockiter',
++                                 'update_princ_encryption', '-vf'])
++
++    def test_used_new_mkey(self):
++        p = re.compile('^MKey: vno 2$', flags=re.MULTILINE)
++
++        result = self.master.run_command(['kadmin.local', 'getprinc',
++                                          f'ldap/{self.master.hostname}'])
++        assert p.search(result.stdout_text)
++        result = self.replicas[0].run_command(['kadmin.local', 'getprinc',
++                                               f'ldap/{self.master.hostname}'])
++        assert p.search(result.stdout_text)
++
++    def test_purge_old_mkey(self):
++        self.master.run_command(['kdb5_util', 'purge_mkeys', '-vf'])
++
++    def test_only_new_mkey(self):
++        p = re.compile('^KVNO: 1,', flags=re.MULTILINE)
++
++        result = self.master.run_command(['kdb5_util', 'list_mkeys'])
++        assert not p.search(result.stdout_text)
++        result = self.replicas[0].run_command(['kdb5_util', 'list_mkeys'])
++        assert not p.search(result.stdout_text)
++
++    @classmethod
++    def uninstall(cls, mh):
++        cls.master.run_command([
++            'rm', '/etc/profile.d/ipaplatform.sh',
++            '/etc/systemd/system/ipa.service.d/platform.conf'])
++        cls.master.run_command(['rmdir', '/etc/systemd/system/ipa.service.d'])
++        super().uninstall(mh)
+-- 
+2.51.0
+
+
+From 5db3bfafe6c12222b656f67d5ae3f6745e5f2644 Mon Sep 17 00:00:00 2001
+From: Thomas Woerner <twoerner@redhat.com>
+Date: Thu, 12 Jun 2025 16:23:13 +0200
+Subject: [PATCH 08/47] ipa-client-install: New --no-dnssec-validation option
+
+The new option is needed to be able to deactivate DNSSEC validation
+for unbound.
+
+Unbound is by default configured to do DNSSEC validation with the
+validator module.
+
+The solution is to set module-config to "iterator".
+
+When the server is built with EDNS client subnet support this should be
+changed to "subnetcache iterator" according to the unbound man page.
+
+Fixes: https://pagure.io/freeipa/issue/9805
+Signed-off-by: Thomas Woerner <twoerner@redhat.com>
+Reviewed-By: Antonio Torres <antorres@redhat.com>
+Reviewed-By: Alexander Bokovoy <abbra@users.noreply.github.com>
+---
+ client/man/ipa-client-install.1    |  3 +++
+ client/share/unbound.conf.template |  1 +
+ ipaclient/install/client.py        | 22 +++++++++++++++++++++-
+ 3 files changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/client/man/ipa-client-install.1 b/client/man/ipa-client-install.1
+index 6833991b8..5432c48a9 100644
+--- a/client/man/ipa-client-install.1
++++ b/client/man/ipa-client-install.1
+@@ -204,6 +204,9 @@ Create DNS A/AAAA record for each IP address on this host.
+ .TP
+ \fB\-\-dns\-over\-tls\fR
+ Configure DNS over TLS.
++.TP
++\fB\-\-no\-dnssec\-validation\fR
++Disable DNSSEC validation for DNS over TLS.
+ 
+ .SS "SSSD OPTIONS"
+ .TP
+diff --git a/client/share/unbound.conf.template b/client/share/unbound.conf.template
+index 166036f65..f611ebb7e 100644
+--- a/client/share/unbound.conf.template
++++ b/client/share/unbound.conf.template
+@@ -3,6 +3,7 @@ server:
+     tls-upstream: yes
+     interface: 127.0.0.55
+     log-servfail: yes
++    ${MODULE_CONFIG_ITERATOR}module-config: "iterator"
+ forward-zone:
+     name: "."
+     forward-tls-upstream: yes
+diff --git a/ipaclient/install/client.py b/ipaclient/install/client.py
+index 43a718283..96e91268f 100644
+--- a/ipaclient/install/client.py
++++ b/ipaclient/install/client.py
+@@ -1675,13 +1675,17 @@ def client_dns(server, hostname, options):
+         # setup and enable Unbound as resolver
+         server_ip = str(list(dnsutil.resolve_ip_addresses(server))[0])
+         forward_addr = "forward-addr: %s#%s" % (server_ip, server)
++        # module_config_iterator is commented out if DNSSEC validation is
++        # not disabled.
++        module_config_iterator = '' if options.no_dnssec_validation else '# '
+         ipautil.copy_template_file(
+             paths.UNBOUND_CONF_SRC,
+             paths.UNBOUND_CONF,
+             dict(
+                 TLS_CERT_BUNDLE_PATH=os.path.join(
+                     paths.OPENSSL_CERTS_DIR, "ca-bundle.crt"),
+-                FORWARD_ADDRS=forward_addr
++                FORWARD_ADDRS=forward_addr,
++                MODULE_CONFIG_ITERATOR=module_config_iterator
+             )
+         )
+         sr = services.knownservices["systemd-resolved"]
+@@ -2419,6 +2423,16 @@ def install_check(options):
+     if not check_ip_addresses(options):
+         raise ScriptError(rval=CLIENT_INSTALL_ERROR)
+ 
++    if options.dns_over_tls \
++       and not services.knownservices["unbound"].is_installed():
++        raise ScriptError(
++            "To enable DNS over TLS, package ipa-client-encrypted-dns must "
++            "be installed.")
++    if options.no_dnssec_validation and not options.dns_over_tls:
++        raise ScriptError(
++            "You can not specify --no-dnssec-validation option without the"
++            "--dns-over-tls option.")
++
+     # Create the discovery instance
+     ds = discovery.IPADiscovery()
+ 
+@@ -4061,6 +4075,12 @@ class ClientInstallInterface(hostname_.HostNameInstallInterface,
+     )
+     dns_over_tls = enroll_only(dns_over_tls)
+ 
++    no_dnssec_validation = knob(
++        None,
++        description="Disable DNSSEC validation for DNS over TLS",
++    )
++    no_dnssec_validation = enroll_only(no_dnssec_validation)
++
+     request_cert = knob(
+         None,
+         deprecated=True,
+-- 
+2.51.0
+
+
+From 0412252dd9a27138411e942305cdf54e70c06f27 Mon Sep 17 00:00:00 2001
+From: Thomas Woerner <twoerner@redhat.com>
+Date: Mon, 23 Jun 2025 14:36:51 +0200
+Subject: [PATCH 09/47] ipaserver/install/dns.py: Allow to Turn off DNSSEC
+ validation for unbound
+
+Unbound is by default configured to do DNSSEC validation with the validator
+module. The solution is to set module-config to "iterator".
+
+When the server is built with EDNS client subnet support this should be
+changed to "subnetcache iterator" according to the unbound man page.
+
+Fixes: https://pagure.io/freeipa/issue/9805
+Signed-off-by: Thomas Woerner <twoerner@redhat.com>
+Reviewed-By: Antonio Torres <antorres@redhat.com>
+Reviewed-By: Alexander Bokovoy <abbra@users.noreply.github.com>
+---
+ ipaserver/install/dns.py | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/ipaserver/install/dns.py b/ipaserver/install/dns.py
+index 470e19159..ccec9d801 100644
+--- a/ipaserver/install/dns.py
++++ b/ipaserver/install/dns.py
+@@ -133,13 +133,17 @@ def _setup_dns_over_tls(options):
+     if options.dot_forwarders:
+         forward_addrs = ["forward-addr: %s" % fw
+                          for fw in options.dot_forwarders]
++    # module_config_iterator is commented out if DNSSEC validation is
++    # not disabled.
++    module_config_iterator = '' if options.no_dnssec_validation else '# '
+     ipautil.copy_template_file(
+         paths.UNBOUND_CONF_SRC,
+         paths.UNBOUND_CONF,
+         dict(
+             TLS_CERT_BUNDLE_PATH=os.path.join(
+                 paths.OPENSSL_CERTS_DIR, "ca-bundle.crt"),
+-            FORWARD_ADDRS="\n".join(forward_addrs)
++            FORWARD_ADDRS="\n".join(forward_addrs),
++            MODULE_CONFIG_ITERATOR=module_config_iterator
+         )
+     )
+ 
+-- 
+2.51.0
+
+
+From 15adc2679dabc97fdc4514fc0775be7308bd922a Mon Sep 17 00:00:00 2001
+From: Sudhir Menon <sumenon@redhat.com>
+Date: Mon, 9 Jun 2025 17:20:32 +0530
+Subject: [PATCH 10/47] ipatests: Tests for 32BitIdranges.
+
+Running 32BitIdrange tests in AD enviornment
+
+Signed-off-by: Sudhir Menon <sumenon@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+---
+ .../test_integration/test_32bit_idranges.py   | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/ipatests/test_integration/test_32bit_idranges.py b/ipatests/test_integration/test_32bit_idranges.py
+index e76e117e5..a928628d3 100644
+--- a/ipatests/test_integration/test_32bit_idranges.py
++++ b/ipatests/test_integration/test_32bit_idranges.py
+@@ -6,6 +6,7 @@ from __future__ import absolute_import
+ 
+ from ipatests.pytest_ipa.integration import tasks
+ from ipatests.test_integration.base import IntegrationTest
++from ipatests.test_integration.test_trust import BaseTestTrust
+ 
+ 
+ class Test32BitIdRanges(IntegrationTest):
+@@ -102,3 +103,24 @@ class Test32BitIdRanges(IntegrationTest):
+         )
+         assert result.returncode == 0
+         assert str(uid) in result.stdout_text
++
++
++class Test32BitIdrangeInTrustEnv(Test32BitIdRanges, BaseTestTrust):
++    """
++    Tests to check 32BitIdrange functionality
++    in IPA-AD trust enviornment
++    """
++    topology = 'line'
++    num_ad_domains = 1
++    num_ad_subdomains = 0
++    num_ad_treedomains = 0
++    num_clients = 0
++
++    @classmethod
++    def install(cls, mh):
++        super(BaseTestTrust, cls).install(mh)
++        cls.ad = cls.ads[0]
++        cls.ad_domain = cls.ad.domain.name
++        tasks.configure_dns_for_trust(cls.master, cls.ad)
++        tasks.install_adtrust(cls.master)
++        tasks.establish_trust_with_ad(cls.master, cls.ad.domain.name)
+-- 
+2.51.0
+
+
+From 6f2f941d52952debcc638766db33b5aae29bbe81 Mon Sep 17 00:00:00 2001
+From: Sudhir Menon <sumenon@redhat.com>
+Date: Mon, 16 Jun 2025 12:15:53 +0530
+Subject: [PATCH 11/47] ipatests: prci nightly definitions for 32BitIdranges
+
+32BitIdranges testsuite has been included in the
+nightly prci definitions.
+
+Signed-off-by: Sudhir Menon <sumenon@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+---
+ .../prci_definitions/nightly_ipa-4-12_latest.yaml   | 12 ++++++++++++
+ .../nightly_ipa-4-12_latest_selinux.yaml            | 13 +++++++++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml b/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml
+index 9e00c55a1..f0bdc1139 100644
+--- a/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml
++++ b/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml
+@@ -2177,3 +2177,15 @@ jobs:
+         template: *ci-ipa-4-12-latest
+         timeout: 14400
+         topology: *master_2repl_1client
++
++  fedora-latest-ipa-4-12/test_32BitIdranges:
++    requires: [fedora-latest-ipa-4-12/build]
++    priority: 50
++    job:
++      class: RunADTests
++      args:
++        build_url: '{fedora-latest-ipa-4-12/build_url}'
++        test_suite: test_integration/test_32bit_idranges.py
++        template: *ci-ipa-4-12-latest
++        timeout: 7200
++        topology: *ad_master
+diff --git a/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml b/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml
+index f76c96267..851d6440c 100644
+--- a/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml
++++ b/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml
+@@ -2351,3 +2351,16 @@ jobs:
+         template: *ci-ipa-4-12-latest
+         timeout: 14400
+         topology: *master_2repl_1client
++
++  fedora-latest-ipa-4-12/test_32BitIdranges:
++    requires: [fedora-latest-ipa-4-12/build]
++    priority: 50
++    job:
++      class: RunADTests
++      args:
++        build_url: '{fedora-latest-ipa-4-12/build_url}'
++        selinux_enforcing: True
++        test_suite: test_integration/test_32bit_idranges.py
++        template: *ci-ipa-4-12-latest
++        timeout: 7200
++        topology: *ad_master
+-- 
+2.51.0
+
+
+From f4cbea00fde8dada84bfd1262b5271035d3ca7a4 Mon Sep 17 00:00:00 2001
+From: Thomas Woerner <twoerner@redhat.com>
+Date: Thu, 12 Jun 2025 18:34:49 +0200
+Subject: [PATCH 12/47] Replica: Request cert for DoT before setting up bind
+
+Deploying a replica with DNS support using an IPA server DNS with DoT
+fails while setting up DNS over TLS. The request for the certificate for
+DoT using IPA CA is done after the DNS server for the replica is configured.
+
+The nameserver in /etc/resolv.conf has been changed to 127.0.0.1, but
+unbound was not yet configured as a forwarder.
+
+The solution is to move the cert request before the DNS server
+configuration. The unbound config from the client deployment is still
+working at that moment.
+
+Fixes: https://pagure.io/freeipa/issue/9808
+Signed-off-by: Thomas Woerner <twoerner@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+---
+ ipaserver/install/dns.py | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/ipaserver/install/dns.py b/ipaserver/install/dns.py
+index ccec9d801..9740faedd 100644
+--- a/ipaserver/install/dns.py
++++ b/ipaserver/install/dns.py
+@@ -114,7 +114,7 @@ def _disable_dnssec():
+             conn.update_entry(entry)
+ 
+ 
+-def _setup_dns_over_tls(options):
++def _request_cert_for_dns_over_tls(options):
+     if os.path.isfile(paths.IPA_CA_CRT) and not options.dns_over_tls_cert:
+         # request certificate for DNS over TLS, using IPA CA
+         cert = paths.BIND_DNS_OVER_TLS_CRT
+@@ -128,6 +128,8 @@ def _setup_dns_over_tls(options):
+         constants.NAMED_USER.chown(cert, gid=constants.NAMED_GROUP.gid)
+         constants.NAMED_USER.chown(key, gid=constants.NAMED_GROUP.gid)
+ 
++
++def _setup_dns_over_tls(options):
+     # setup and enable Unbound as resolver
+     forward_addrs = ["# forward-addr: specify here forwarders"]
+     if options.dot_forwarders:
+@@ -435,6 +437,10 @@ def install(standalone, replica, options, api=api):
+             "and IPA CA is not present."
+         )
+ 
++    if options.dns_over_tls:
++        print("Request certificate for DNS over TLS, using IPA CA")
++        _request_cert_for_dns_over_tls(options)
++
+     bind = bindinstance.BindInstance(fstore, api=api)
+     bind.setup(api.env.host, ip_addresses, api.env.realm, api.env.domain,
+                options.forwarders, options.forward_policy,
+-- 
+2.51.0
+
+
+From a6ae9f740991888bede82884bd9609db220430e3 Mon Sep 17 00:00:00 2001
+From: Antonio Torres <antorres@redhat.com>
+Date: Mon, 23 Jun 2025 10:49:34 +0200
+Subject: [PATCH 13/47] dns: only overwrite resolv.conf during eDNS setup when
+ needed
+
+Don't overwrite resolv.conf if it already points to 127.0.0.1. This
+ensures compatibility with read-only containers.
+
+Fixes: https://pagure.io/freeipa/issue/9813
+Signed-off-by: Antonio Torres <antorres@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+---
+ ipaserver/install/dns.py | 16 +++++++++-------
+ 1 file changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/ipaserver/install/dns.py b/ipaserver/install/dns.py
+index 9740faedd..0f7a3073f 100644
+--- a/ipaserver/install/dns.py
++++ b/ipaserver/install/dns.py
+@@ -33,7 +33,7 @@ from ipapython import ipautil
+ from ipapython import dnsutil
+ from ipapython.certdb import EXTERNAL_CA_TRUST_FLAGS
+ from ipapython.dn import DN
+-from ipapython.dnsutil import check_zone_overlap
++from ipapython.dnsutil import check_zone_overlap, get_ipa_resolver
+ from ipapython.install import typing
+ from ipapython.install.core import group, knob
+ from ipapython.admintool import ScriptError
+@@ -171,17 +171,19 @@ def _setup_dns_over_tls(options):
+             f.write("\n".join(dns_none))
+         nm.reload_or_restart()
+ 
+-    # Overwrite resolv.conf to point to IPA
++    # Ensure resolv.conf points to IPA
+     cfg = [
+         "# auto-generated by IPA installer",
+         "search .",
+         "nameserver 127.0.0.1\n"
+     ]
+-    fstore = sysrestore.FileStore(paths.SYSRESTORE)
+-    fstore.backup_file(paths.RESOLV_CONF)
+-    with open(paths.RESOLV_CONF, 'w') as f:
+-        f.write('\n'.join(cfg))
+-        os.chmod(paths.RESOLV_CONF, 0o644)
++    nameservers = get_ipa_resolver().nameservers
++    if not nameservers or nameservers[0] != "127.0.0.1":
++        fstore = sysrestore.FileStore(paths.SYSRESTORE)
++        fstore.backup_file(paths.RESOLV_CONF)
++        with open(paths.RESOLV_CONF, 'w') as f:
++            f.write('\n'.join(cfg))
++            os.chmod(paths.RESOLV_CONF, 0o644)
+ 
+     services.knownservices.unbound.enable()
+     services.knownservices.unbound.restart()
+-- 
+2.51.0
+
+
+From 6bb7ebd40f3fa9c266e62caef961c1078440751d Mon Sep 17 00:00:00 2001
+From: Rafael Guterres Jeffman <rjeffman@redhat.com>
+Date: Tue, 17 Jun 2025 17:15:49 -0300
+Subject: [PATCH 14/47] Use correct capitalization for GitHub and GitLab
+
+The correct third party trademarks are GitHub and GitLab, and this is
+the capitalization that needs to be used for documentation and messages,
+when referring to each service.
+
+Fixes: https://pagure.io/freeipa/issue/9811
+Signed-off-by: Rafael Guterres Jeffman <rjeffman@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ doc/designs/external-idp/idp-api.md      | 22 +++++++++++-----------
+ doc/workshop/12-external-idp-support.rst |  4 ++--
+ ipaserver/plugins/internal.py            |  2 +-
+ ipatests/test_integration/test_cert.py   |  2 +-
+ po/ipa.pot                               |  2 +-
+ 5 files changed, 16 insertions(+), 16 deletions(-)
+
+diff --git a/doc/designs/external-idp/idp-api.md b/doc/designs/external-idp/idp-api.md
+index fe2ba8d67..59d2ccb57 100644
+--- a/doc/designs/external-idp/idp-api.md
++++ b/doc/designs/external-idp/idp-api.md
+@@ -156,13 +156,13 @@ List of pre-populated IdP types is currently limited by the following provider
+ Some IdP providers support parametrized URIs which include organization or a
+ realm name, or specific base URL, or both.
+ 
+-One notable omission in the pre-populated IdP types above is Gitlab.
++One notable omission in the pre-populated IdP types above is GitLab.
+ 
+ FreeIPA only supports IdPs that implement OAuth 2.0 Device authorization
+ grant flow as defined by the [RFC 8628](https://www.rfc-editor.org/rfc/rfc8628).
+ If required IdP cannot be made to support Device authorization grant flow, it
+ is recommended to use OAuth 2.0 federation within an IdP that supports this
+-method. Gitlab does not support OAuth 2.0 Device authorization grant flow and
++method. GitLab does not support OAuth 2.0 Device authorization grant flow and
+ thus is not supported directly.
+ 
+ SSSD 2.7.0 implements Kerberos pre-authentication method `idp` (registered as a
+@@ -193,7 +193,7 @@ Choosing `--provider=google` would expand to use the following options:
+ | `--scope`=STR         | `openid email`                                     |
+ | `--idp-user-id`=STR   | `email`                                            |
+ 
+-#### Github IdPs
++#### GitHub IdPs
+ 
+ Choosing `--provider=github` would expand to use the following options:
+ 
+@@ -207,17 +207,17 @@ Choosing `--provider=github` would expand to use the following options:
+ | `--scope`=STR         | `user`                                             |
+ | `--idp-user-id`=STR   | `login`                                            |
+ 
+-Please note that Github explicitly states that a user login is not unique and
++Please note that GitHub explicitly states that a user login is not unique and
+ can be reused after a user account was deleted. The configuration above aims
+-for an easy setup for testing. If production deployment with Github IdP would
++for an easy setup for testing. If production deployment with GitHub IdP would
+ be required, it is recommended to change `--idp-user-id` to a more unique subject
+-like `id`. Unfortunately, Github UI does not give an easy way to discover a
++like `id`. Unfortunately, GitHub UI does not give an easy way to discover a
+ user ID. Other IdPs also lack an easy way to resolve these internal identifiers
+ when not authorized by the user themselves.
+ 
+-For Github, user's ID can be looked up without authentication through the Users
++For GitHub, user's ID can be looked up without authentication through the Users
+ API. Assuming we have `curl` and `jq` utilities available, a request to
+-discover an ID of a Github user named `test` would look like:
++discover an ID of a GitHub user named `test` would look like:
+ 
+ ```
+ $ curl --silent \
+@@ -386,10 +386,10 @@ scope is used, this typically maps to `sub` value. Since there are no ways to
+ pull this value for all users in advance, pre-populated IdP templates set OAuth
+ 2.0 scopes to include `email` and then use `email` to map IdP subject where possible.
+ There are some well-known IdPs which allow reuse of user accounts and emails, this
+-applies to both Github and Gitlab. Since Gitlab does not support OAuth 2.0
++applies to both GitHub and GitLab. Since GitLab does not support OAuth 2.0
+ Device authorization grant flow, it is not an issue in itself for this project. However,
+-for Github it is known that user accounts can be recycled after their removal. In
+-this case we would recommend to use internal Github identifier instead.
++for GitHub it is known that user accounts can be recycled after their removal. In
++this case we would recommend to use internal GitHub identifier instead.
+ 
+ ## Upgrade and backward compatibility
+ 
+diff --git a/doc/workshop/12-external-idp-support.rst b/doc/workshop/12-external-idp-support.rst
+index 022c26483..66c714c25 100644
+--- a/doc/workshop/12-external-idp-support.rst
++++ b/doc/workshop/12-external-idp-support.rst
+@@ -94,7 +94,7 @@ authorization grant flow:
+ 
+ * Microsoft Identity Platform, including Azure AD
+ * Google
+-* Github
++* GitHub
+ * Keycloak, including Red Hat SSO
+ * Okta
+ 
+@@ -389,7 +389,7 @@ IPA. Option ``--provider keycloak`` allows us to fill-in pre-defined template
+ for Keycloak or Red Hat SSO IdPs. The template expects both Keycloak's realm
+ (``--org`` option) and a base URL (``--base-url`` option) because Keycloak is
+ typically deployed as a part of a larger solution. These options may not be
+-needed for other pre-defined templates like Google or Github.
++needed for other pre-defined templates like Google or GitHub.
+ 
+ The `openid` scope is mandatory since
+ [Keycloak 19.0.2](https://www.keycloak.org/docs/latest/upgrading/index.html#userinfo-endpoint-changes).
+diff --git a/ipaserver/plugins/internal.py b/ipaserver/plugins/internal.py
+index e8642b6f0..283b43077 100644
+--- a/ipaserver/plugins/internal.py
++++ b/ipaserver/plugins/internal.py
+@@ -1100,7 +1100,7 @@ class i18n_messages(Command):
+             "idp": {
+                 "template_keycloak": _("Keycloak or Red Hat SSO"),
+                 "template_google": _("Google"),
+-                "template_github": _("Github"),
++                "template_github": _("GitHub"),
+                 "template_microsoft": _("Microsoft or Azure"),
+                 "template_okta": _("Okta"),
+                 "label_idpclient": _("OAuth 2.0 client details"),
+diff --git a/ipatests/test_integration/test_cert.py b/ipatests/test_integration/test_cert.py
+index 88859e67f..05b20b910 100644
+--- a/ipatests/test_integration/test_cert.py
++++ b/ipatests/test_integration/test_cert.py
+@@ -540,7 +540,7 @@ class TestCAShowErrorHandling(IntegrationTest):
+         4. Verify LWCA is recognized on the server
+         5. Run `ipa ca-show <LWCA>`
+ 
+-        PKI Github Link: https://github.com/dogtagpki/pki/pull/3605/
++        PKI GitHub Link: https://github.com/dogtagpki/pki/pull/3605/
+         """
+         self.replicas[0].run_command(['systemctl', 'stop', 'ipa-custodia'])
+         lwca = 'lwca1'
+diff --git a/po/ipa.pot b/po/ipa.pot
+index 41ee14059..07413d546 100644
+--- a/po/ipa.pot
++++ b/po/ipa.pot
+@@ -23944,7 +23944,7 @@ msgid "Google"
+ msgstr ""
+ 
+ #: ipaserver/plugins/internal.py:1103
+-msgid "Github"
++msgid "GitHub"
+ msgstr ""
+ 
+ #: ipaserver/plugins/internal.py:1104
+-- 
+2.51.0
+
+
+From 43f1653c41312fa831db30f0aa4e1699816b7cac Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Fri, 11 Jul 2025 10:52:58 +0300
+Subject: [PATCH 15/47] freeipa.spec.in: protect scriptlets in environment
+ where dbus or systemd do not run
+
+For quite some time, even as early as with Fedora 37, we had
+
+  Running scriptlet: freeipa-server-trust-ad-4.10.1-1.fc37.x86_64
+                                            338/343
+System has not been booted with systemd as init system (PID 1). Can't operate.
+Failed to connect to bus: Host is down
+System has not been booted with systemd as init system (PID 1). Can't operate.
+Failed to connect to bus: Host is down
+warning: %post(freeipa-server-trust-ad-4.10.1-1.fc37.x86_64) scriptlet failed,
+exit status 1
+
+Error in POSTIN scriptlet in rpm package freeipa-server-trust-ad
+
+when installing freeipa-server-trust-ad, but the whole rpm transaction passed
+and the dnf command returned with exit 0. So we did not care about that failure
+because, well, it did not get reported in any way it could be caught.
+
+This has changed with recent registry.fedoraproject.org/fedora:rawhide image
+which seem so have rpm-5.99.91-1.fc43.x86_64. Now instead of exiting with 0 as
+with previous registry.fedoraproject.org/fedora:rawhide images, the dnf exits
+with 1, even if the version freeipa-server-trust-ad-4.12.2-14.fc43.x86_64 is
+the same in both cases.
+
+Fixes: https://pagure.io/freeipa/issue/9826
+
+Signed-off-by: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ freeipa.spec.in | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/freeipa.spec.in b/freeipa.spec.in
+index 2b97b1176..8b7f72a70 100755
+--- a/freeipa.spec.in
++++ b/freeipa.spec.in
+@@ -1326,8 +1326,8 @@ fi
+ %post server-trust-ad
+ %{_sbindir}/update-alternatives --install %{_libdir}/krb5/plugins/libkrb5/winbind_krb5_locator.so \
+         winbind_krb5_locator.so /dev/null 90
+-/bin/systemctl reload-or-try-restart dbus
+-/bin/systemctl reload-or-try-restart oddjobd
++/bin/systemctl reload-or-try-restart dbus >/dev/null 2>&1 || :
++/bin/systemctl reload-or-try-restart oddjobd >/dev/null 2>&1 || :
+ 
+ 
+ %posttrans server-trust-ad
+@@ -1344,8 +1344,8 @@ if [ $1 -eq 0 ]; then
+     %{_sbindir}/update-alternatives --remove winbind_krb5_locator.so /dev/null
+     # Skip systemctl calls when leapp upgrade is in progress
+     if [ -z "$LEAPP_IPU_IN_PROGRESS" ] ; then
+-        /bin/systemctl reload-or-try-restart dbus
+-        /bin/systemctl reload-or-try-restart oddjobd
++        /bin/systemctl reload-or-try-restart dbus >/dev/null 2>&1 || :
++        /bin/systemctl reload-or-try-restart oddjobd >/dev/null 2>&1 || :
+     fi
+ fi
+ 
+-- 
+2.51.0
+
+
+From 3b1d0e1c774b4edeb0844018f50a00ea30e55ea0 Mon Sep 17 00:00:00 2001
+From: David Hanina <dhanina@redhat.com>
+Date: Wed, 16 Jul 2025 07:08:04 +0200
+Subject: [PATCH 16/47] Fix terminal height for Rawhide
+
+Replaces old ioctl function with shutil.get_terminal_size.
+This should be more universal.
+
+Fixes: https://pagure.io/freeipa/issue/9824
+Signed-off-by: David Hanina <dhanina@redhat.com>
+Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipalib/util.py | 11 ++---------
+ 1 file changed, 2 insertions(+), 9 deletions(-)
+
+diff --git a/ipalib/util.py b/ipalib/util.py
+index 128420181..0036d143b 100644
+--- a/ipalib/util.py
++++ b/ipalib/util.py
+@@ -35,10 +35,7 @@ import dns
+ import encodings
+ import sys
+ import ssl
+-import termios
+-import fcntl
+ import shutil
+-import struct
+ import subprocess
+ 
+ import netaddr
+@@ -1335,7 +1332,7 @@ def no_matching_interface_for_ip_address_warning(addr_list):
+             )
+ 
+ 
+-def get_terminal_height(fd=1):
++def get_terminal_height():
+     """
+     Get current terminal height
+ 
+@@ -1345,11 +1342,7 @@ def get_terminal_height(fd=1):
+     Returns:
+         int: Terminal height
+     """
+-    try:
+-        return struct.unpack(
+-            'hh', fcntl.ioctl(fd, termios.TIOCGWINSZ, b'1234'))[0]
+-    except (IOError, OSError, struct.error):
+-        return os.environ.get("LINES", 25)
++    return shutil.get_terminal_size().lines
+ 
+ 
+ def get_pager():
+-- 
+2.51.0
+
+
+From 45cce31e2596de2c9b6048674510572c248e2ec9 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Tue, 15 Jul 2025 10:52:01 +0300
+Subject: [PATCH 17/47] kdb: prevent double crash in RBCD ACL free
+
+acl_list was set to prev->tl_data_contents and its value is freed but
+then is is freed again outside of the if(). Just reset acl_list pointer
+as prev->tl_data_contents is removed unconditionally outside of the RBCD
+ACL removal.
+
+Related: https://pagure.io/freeipa/issue/9367
+
+Signed-off-by: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ daemons/ipa-kdb/ipa_kdb_principals.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/daemons/ipa-kdb/ipa_kdb_principals.c b/daemons/ipa-kdb/ipa_kdb_principals.c
+index 19998c2a3..a7e77e940 100644
+--- a/daemons/ipa-kdb/ipa_kdb_principals.c
++++ b/daemons/ipa-kdb/ipa_kdb_principals.c
+@@ -2160,7 +2160,8 @@ void ipadb_free_principal(krb5_context kcontext, krb5_db_entry *entry)
+                 for (i = 0; (acl_list != NULL) && (acl_list[i] != NULL); i++) {
+                     free(acl_list[i]);
+                 }
+-                free(acl_list);
++                /* prev->tl_data_contents will be removed below */
++                acl_list = NULL;
+             }
+             free(prev->tl_data_contents);
+             free(prev);
+-- 
+2.51.0
+
+
+From 0c9ba2a0075f02315810521357cf2e5b52fc7d41 Mon Sep 17 00:00:00 2001
+From: Sudhir Menon <sumenon@redhat.com>
+Date: Wed, 9 Apr 2025 13:10:58 +0530
+Subject: [PATCH 18/47] ipatests: Tests for ipa-migrate tool with ldif file
+
+This test checks that when ipa-migrate tool
+uses ldif file it works without any error.
+
+Related: https://pagure.io/freeipa/issue/9776
+
+Signed-off-by: Sudhir Menon <sumenon@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ .../test_ipa_ipa_migration.py                 | 80 +++++++++++++++++++
+ 1 file changed, 80 insertions(+)
+
+diff --git a/ipatests/test_integration/test_ipa_ipa_migration.py b/ipatests/test_integration/test_ipa_ipa_migration.py
+index 95c29234f..c6247e772 100644
+--- a/ipatests/test_integration/test_ipa_ipa_migration.py
++++ b/ipatests/test_integration/test_ipa_ipa_migration.py
+@@ -1265,3 +1265,83 @@ class TestIPAMigrationWithADtrust(IntegrationTest):
+             ["ipa", "idrange-show", ad_domain_name + "_id_range"]
+         )
+         assert cmd1.stdout_text == cmd2.stdout_text
++
++
++class TestIPAMigratewithBackupRestore(IntegrationTest):
++    """
++    Test for ipa-migrate tool with backup files.
++    The master and replicas[1] are used to create the data source.
++    The replicas[0] is used as new server, retrieving data from the source.
++    replicas[1] is needed to make sure that the source LDIF
++    file contains replication attributes with
++    options (for instance objectClass;vucsn-67f7b3de000300030000).
++    """
++    num_replicas = 2
++    topology = "line"
++
++    @classmethod
++    def install(cls, mh):
++        tasks.install_master(cls.master, setup_dns=True, setup_kra=True)
++        prepare_ipa_server(cls.master)
++        tasks.install_master(cls.replicas[0], setup_dns=True, setup_kra=True)
++        tasks.install_replica(cls.master, cls.replicas[1],
++                              setup_dns=True, setup_kra=True)
++
++    @pytest.fixture
++    def create_delete_user(self):
++        """
++        This fixtures creates a ldapuser using the
++        ldif file and then delete the users
++        """
++        self.master.run_command(['ipa', 'user-add', 'testuser',
++                                 '--first', 'test',
++                                 '--last', 'user'])
++        self.master.run_command(['ipa', 'user-del', 'testuser'])
++        yield
++
++    def test_ipa_migrate_stage_mode(self, create_delete_user):
++        """
++        This test checks ipa-migrate with LDIF file
++        from backup of remote server is successful.
++        """
++        ERR_MSG = (
++            "error: change collided with another change"
++        )
++        dashed_domain_name = self.master.domain.realm.replace(
++            ".", '-'
++        )
++        DB_LDIF_FILE = '{}-userRoot.ldif'.format(
++            dashed_domain_name
++        )
++        SCHEMA_LDIF_FILE = '{}''/config_files/schema/99user.ldif'.format(
++            dashed_domain_name)
++        CONFIG_LDIF_FILE = '{}''/config_files/dse.ldif'.format(
++            dashed_domain_name)
++        param = [
++            '-n', '-g', CONFIG_LDIF_FILE, '-m', SCHEMA_LDIF_FILE,
++            '-f', DB_LDIF_FILE
++        ]
++        tasks.kinit_admin(self.master)
++        tasks.kinit_admin(self.replicas[0])
++        backup_path = tasks.get_backup_dir(self.master)
++        remote_ipa_tar_file = backup_path + '/ipa-full.tar'
++        ipa_tar_file = self.master.get_file_contents(
++            remote_ipa_tar_file
++        )
++        replica_file_name = "/tmp/ipa-full.tar"
++        self.replicas[0].put_file_contents(
++            replica_file_name, ipa_tar_file
++        )
++        self.replicas[0].run_command(
++            ['/usr/bin/tar', '-xvf', replica_file_name]
++        )
++        result = run_migrate(
++            self.replicas[0],
++            "stage-mode",
++            self.master.hostname,
++            "cn=Directory Manager",
++            self.master.config.admin_password,
++            extra_args=param,
++        )
++        assert result.returncode == 0
++        assert ERR_MSG not in result.stderr_text
+-- 
+2.51.0
+
+
+From 6ee21100aaa7ffb85fcebd29033c27f3f259f773 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Mon, 28 Jul 2025 08:53:06 +0200
+Subject: [PATCH 19/47] ipatests: Nightly definitions for
+ TestIPAMigratewithBackupRestore
+
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ .../prci_definitions/nightly_ipa-4-12_latest.yaml   | 12 ++++++++++++
+ .../nightly_ipa-4-12_latest_selinux.yaml            | 13 +++++++++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml b/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml
+index f0bdc1139..bc2a10de4 100644
+--- a/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml
++++ b/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml
+@@ -2154,6 +2154,18 @@ jobs:
+         timeout: 7200
+         topology: *ad_master_1repl_1client
+ 
++  fedora-latest-ipa-4-12/test_IPAMigrateBackupRestore:
++    requires: [fedora-latest-ipa-4-12/build]
++    priority: 50
++    job:
++      class: RunPytest
++      args:
++        build_url: '{fedora-latest-ipa-4-12/build_url}'
++        test_suite: test_integration/test_ipa_ipa_migration.py::TestIPAMigratewithBackupRestore
++        template: *ci-ipa-4-12-latest
++        timeout: 7200
++        topology: *master_2repl_1client
++
+   fedora-latest-ipa-4-12/test_cockpit:
+     requires: [fedora-latest-ipa-4-12/build]
+     priority: 50
+diff --git a/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml b/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml
+index 851d6440c..fc31186df 100644
+--- a/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml
++++ b/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml
+@@ -2326,6 +2326,19 @@ jobs:
+         timeout: 7200
+         topology: *ad_master_1repl_1client
+ 
++  fedora-latest-ipa-4-12/test_IPAMigrateBackupRestore:
++    requires: [fedora-latest-ipa-4-12/build]
++    priority: 50
++    job:
++      class: RunPytest
++      args:
++        build_url: '{fedora-latest-ipa-4-12/build_url}'
++        selinux_enforcing: True
++        test_suite: test_integration/test_ipa_ipa_migration.py::TestIPAMigratewithBackupRestore
++        template: *ci-ipa-4-12-latest
++        timeout: 7200
++        topology: *master_2repl_1client
++
+   fedora-latest-ipa-4-12/test_cockpit:
+     requires: [fedora-latest-ipa-4-12/build]
+     priority: 50
+-- 
+2.51.0
+
+
+From 7887b0211cdcd6fbd9a3d86882fabd26e50bcadd Mon Sep 17 00:00:00 2001
+From: Stanislav Levin <slev@altlinux.org>
+Date: Thu, 17 Jul 2025 17:25:59 +0300
+Subject: [PATCH 20/47] install: make use of shared temp directory for hsm
+ validation
+
+During hsm validation temporary directory and files are prepared
+by root in base temporary directory which can be private and
+thereby not readable by anybody but root. The validation in its
+turn, run some checks as pkiuser and fail to read not accessible
+resources in such a case.
+
+Hence, to make them available some shared place need to be used,
+e.g. /tmp.
+
+Fixes: https://pagure.io/freeipa/issue/9831
+Signed-off-by: Stanislav Levin <slev@altlinux.org>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipaserver/install/ca.py | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/ipaserver/install/ca.py b/ipaserver/install/ca.py
+index 2959aceed..d0d9887e5 100644
+--- a/ipaserver/install/ca.py
++++ b/ipaserver/install/ca.py
+@@ -11,6 +11,8 @@ from __future__ import print_function, absolute_import
+ import enum
+ import logging
+ import os.path
++import tempfile
++
+ import pki.util
+ 
+ import six
+@@ -212,7 +214,11 @@ def hsm_validator(token_name, token_library, token_password):
+     pkiuser = constants.PKI_USER
+     pkigroup = constants.PKI_GROUP
+     group_list = os.getgrouplist(pkiuser, pkigroup.gid)
+-    with certdb.NSSDatabase() as tempnssdb:
++    with (
++        tempfile.TemporaryDirectory(dir=paths.TMP) as tempnssdir,
++        tempfile.NamedTemporaryFile(mode="w+", dir=paths.TMP) as pwdfile,
++    ):
++        tempnssdb = certdb.NSSDatabase(nssdir=tempnssdir)
+         tempnssdb.create_db(user=str(pkiuser), group=str(pkigroup))
+         # Try adding the token library to the temporary database in
+         # case it isn't already available. Ignore all errors.
+@@ -250,7 +256,9 @@ def hsm_validator(token_name, token_library, token_password):
+                 "Token named '%s' was not found. Check permissions"
+                 % token_name
+             )
+-        pwdfile = ipautil.write_tmp_file(token_password)
++
++        pwdfile.write(token_password)
++        pwdfile.flush()
+         os.fchown(pwdfile.fileno(), pkiuser.uid, pkigroup.gid)
+         args = [
+             paths.CERTUTIL,
+-- 
+2.51.0
+
+
+From bae780843ef26da1d0876086205cda9f590e9c01 Mon Sep 17 00:00:00 2001
+From: Antonio Torres <antorres@redhat.com>
+Date: Tue, 24 Jun 2025 13:41:17 +0200
+Subject: [PATCH 21/47] dns: disable all previous Unbound configuration before
+ deploying ours
+
+Previous configuration from another packages might break our Unbound
+setup. Rename the config files to disable them before deploying our
+configuration.
+
+Fixes: https://pagure.io/freeipa/issue/9814
+Signed-off-by: Antonio Torres <antorres@redhat.com>
+Reviewed-By: Thomas Woerner <twoerner@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipaclient/install/client.py       | 29 ++++++++++++++++++++++++++---
+ ipaplatform/base/paths.py         |  1 +
+ ipaserver/install/bindinstance.py | 17 +++++++++++++++--
+ ipaserver/install/dns.py          | 11 ++++++++++-
+ 4 files changed, 52 insertions(+), 6 deletions(-)
+
+diff --git a/ipaclient/install/client.py b/ipaclient/install/client.py
+index 96e91268f..1885e4a8d 100644
+--- a/ipaclient/install/client.py
++++ b/ipaclient/install/client.py
+@@ -1656,7 +1656,7 @@ def get_server_connection_interface(server):
+     raise RuntimeError(msg)
+ 
+ 
+-def client_dns(server, hostname, options):
++def client_dns(server, hostname, options, statestore):
+ 
+     try:
+         verify_host_resolvable(hostname)
+@@ -1672,12 +1672,22 @@ def client_dns(server, hostname, options):
+ 
+     # Setup DNS over TLS
+     if options.dns_over_tls:
++        fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
++        statestore.backup_state("dns_over_tls", "enabled", True)
++        save_state(services.knownservices["unbound"], statestore)
+         # setup and enable Unbound as resolver
+         server_ip = str(list(dnsutil.resolve_ip_addresses(server))[0])
+         forward_addr = "forward-addr: %s#%s" % (server_ip, server)
+         # module_config_iterator is commented out if DNSSEC validation is
+         # not disabled.
+         module_config_iterator = '' if options.no_dnssec_validation else '# '
++        # backup and remove all previous Unbound configuration
++        for filename in os.listdir(paths.UNBOUND_CONFIG_DIR):
++            filepath = os.path.join(paths.UNBOUND_CONFIG_DIR, filename)
++            if filepath == paths.UNBOUND_CONF:
++                continue
++            fstore.backup_file(filepath)
++            remove_file(filepath)
+         ipautil.copy_template_file(
+             paths.UNBOUND_CONF_SRC,
+             paths.UNBOUND_CONF,
+@@ -1710,7 +1720,6 @@ def client_dns(server, hostname, options):
+             "search .",
+             "nameserver 127.0.0.55\n"
+         ]
+-        fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
+         fstore.backup_file(paths.RESOLV_CONF)
+         with open(paths.RESOLV_CONF, 'w') as f:
+             f.write('\n'.join(cfg))
+@@ -3242,7 +3251,7 @@ def _install(options, tdict):
+     tasks.insert_ca_certs_into_systemwide_ca_store(ca_certs)
+ 
+     if not options.on_master:
+-        client_dns(cli_server[0], hostname, options)
++        client_dns(cli_server[0], hostname, options, statestore)
+ 
+     update_ssh_keys(hostname, paths.SSH_CONFIG_DIR, options, cli_server[0])
+ 
+@@ -3632,6 +3641,20 @@ def uninstall(options):
+         except Exception:
+             pass
+ 
++    # Restore unbound to its original status
++    if statestore.restore_state("dns_over_tls", "enabled"):
++        unbound = services.knownservices['unbound']
++        if not statestore.restore_state('unbound', 'running'):
++            unbound.stop()
++        if not statestore.restore_state('unbound', 'enabled'):
++            unbound.disable()
++        # restore unbound config files that were removed during IPA install
++        remove_file(paths.UNBOUND_CONF)
++        for filename, fileinfo in fstore.files.items():
++            if paths.UNBOUND_CONFIG_DIR in fileinfo:
++                fstore.restore_file(
++                    os.path.join(paths.UNBOUND_CONFIG_DIR, filename))
++
+     logger.info("Disabling client Kerberos and LDAP configurations")
+     was_sssd_installed = False
+     was_sshd_configured = False
+diff --git a/ipaplatform/base/paths.py b/ipaplatform/base/paths.py
+index a5bca789b..8b62971f9 100644
+--- a/ipaplatform/base/paths.py
++++ b/ipaplatform/base/paths.py
+@@ -102,6 +102,7 @@ class BasePathNamespace:
+     NAMED_MANAGED_KEYS_DIR = "/var/named/dynamic"
+     NAMED_CRYPTO_POLICY_FILE = None
+     UNBOUND_CONF_SRC = '/usr/share/ipa/client/unbound.conf.template'
++    UNBOUND_CONFIG_DIR = "/etc/unbound/conf.d/"
+     UNBOUND_CONF = "/etc/unbound/conf.d/zzz-ipa.conf"
+     NSLCD_CONF = "/etc/nslcd.conf"
+     NSS_LDAP_CONF = "/etc/nss_ldap.conf"
+diff --git a/ipaserver/install/bindinstance.py b/ipaserver/install/bindinstance.py
+index 0cc1f1325..ea4d4bf0e 100644
+--- a/ipaserver/install/bindinstance.py
++++ b/ipaserver/install/bindinstance.py
+@@ -690,6 +690,10 @@ class BindInstance(service.Service):
+         self.reverse_zones = reverse_zones
+ 
+         self.sstore.backup_state("dns_over_tls", "enabled", dns_over_tls)
++        self.sstore.backup_state("unbound", "running",
++                                 services.knownservices["unbound"].is_running())
++        self.sstore.backup_state("unbound", "enabled",
++                                 services.knownservices["unbound"].is_enabled())
+ 
+         if not zonemgr:
+             self.zonemgr = 'hostmaster.%s' % normalize_zone(self.domain)
+@@ -1382,8 +1386,17 @@ class BindInstance(service.Service):
+         if self.sstore.restore_state("dns_over_tls", "enabled"):
+             if not self.sstore.restore_state("dns_over_tls", "external_crt"):
+                 certmonger.stop_tracking(certfile=paths.BIND_DNS_OVER_TLS_CRT)
+-            services.knownservices["unbound"].disable()
+-            services.knownservices["unbound"].stop()
++            # only disable unbound if it was before IPA was deployed
++            if not self.sstore.restore_state("unbound", "enabled"):
++                services.knownservices["unbound"].disable()
++            if not self.sstore.restore_state("unbound", "running"):
++                services.knownservices["unbound"].stop()
++            # restore unbound config files that were removed during IPA install
++            ipautil.remove_file(paths.UNBOUND_CONF)
++            for filename, fileinfo in self.fstore.files.items():
++                if paths.UNBOUND_CONFIG_DIR in fileinfo:
++                    self.fstore.restore_file(
++                        os.path.join(paths.UNBOUND_CONFIG_DIR, filename))
+ 
+         ipautil.remove_file(paths.NAMED_CONF_BAK)
+         ipautil.remove_file(paths.NAMED_CUSTOM_CONF)
+diff --git a/ipaserver/install/dns.py b/ipaserver/install/dns.py
+index 0f7a3073f..39c2f677b 100644
+--- a/ipaserver/install/dns.py
++++ b/ipaserver/install/dns.py
+@@ -138,6 +138,16 @@ def _setup_dns_over_tls(options):
+     # module_config_iterator is commented out if DNSSEC validation is
+     # not disabled.
+     module_config_iterator = '' if options.no_dnssec_validation else '# '
++
++    # backup and remove all previous Unbound configuration
++    fstore = sysrestore.FileStore(paths.SYSRESTORE)
++    for filename in os.listdir(paths.UNBOUND_CONFIG_DIR):
++        filepath = os.path.join(paths.UNBOUND_CONFIG_DIR, filename)
++        if filepath == paths.UNBOUND_CONF:
++            continue
++        fstore.backup_file(filepath)
++        ipautil.remove_file(filepath)
++
+     ipautil.copy_template_file(
+         paths.UNBOUND_CONF_SRC,
+         paths.UNBOUND_CONF,
+@@ -179,7 +189,6 @@ def _setup_dns_over_tls(options):
+     ]
+     nameservers = get_ipa_resolver().nameservers
+     if not nameservers or nameservers[0] != "127.0.0.1":
+-        fstore = sysrestore.FileStore(paths.SYSRESTORE)
+         fstore.backup_file(paths.RESOLV_CONF)
+         with open(paths.RESOLV_CONF, 'w') as f:
+             f.write('\n'.join(cfg))
+-- 
+2.51.0
+
+
+From 2863b585d2750cc71d6409da1848124583cabc13 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Wed, 30 Jul 2025 13:18:11 +0200
+Subject: [PATCH 22/47] Spec file: use nodejs22 on fedora 41+
+
+Do not use the newest nodesjs24 as it does not provide the /usr/bin/node
+command, only /usr/bin/node-24.
+Force the use of nodejs22.
+
+Fixes: https://pagure.io/freeipa/issue/9836
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ freeipa.spec.in | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/freeipa.spec.in b/freeipa.spec.in
+index 8b7f72a70..1cb3d0233 100755
+--- a/freeipa.spec.in
++++ b/freeipa.spec.in
+@@ -328,8 +328,9 @@ BuildRequires:  libsss_idmap-devel
+ BuildRequires:  libsss_certmap-devel
+ BuildRequires:  libsss_nss_idmap-devel >= %{sssd_version}
+ %if 0%{?fedora} >= 41 || 0%{?rhel} >= 10
++# on fedora 41+, stick to nodejs22
+ # Do not use nodejs22 on fedora < 41, https://pagure.io/freeipa/issue/9643
+-BuildRequires: nodejs(abi)
++BuildRequires: nodejs(abi) == 127
+ %elif 0%{?fedora} >= 39
+ # Do not use nodejs20 on fedora < 39, https://pagure.io/freeipa/issue/9374
+ BuildRequires:  nodejs(abi) < 127
+-- 
+2.51.0
+
+
+From b69363940b7ad61e80649389eda80f53f722fd7c Mon Sep 17 00:00:00 2001
+From: Anuja More <amore@redhat.com>
+Date: Thu, 24 Jul 2025 16:57:33 +0530
+Subject: [PATCH 23/47] ipatests: Remove xfail from
+ test_installation::test_number_of_zones
+
+Removed xfail for test_number_of_zones
+This test is xpass when executed in IdM-CI
+but still failing in PRCI. There is a different configuration
+in the 2 CIs and with this we will get a green test
+in IdM-CI nightly tests.
+
+Related : https://pagure.io/freeipa/issue/9135
+
+Signed-off-by: Anuja More <amore@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipatests/test_integration/test_installation.py | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/ipatests/test_integration/test_installation.py b/ipatests/test_integration/test_installation.py
+index 1fae47267..e8ca76300 100644
+--- a/ipatests/test_integration/test_installation.py
++++ b/ipatests/test_integration/test_installation.py
+@@ -587,13 +587,16 @@ class TestInstallWithCA_DNS3(CALessBase):
+     ticket 7239
+     """
+ 
+-    @pytest.mark.xfail(
+-        osinfo.id == 'fedora' and osinfo.version_number >= (36,),
+-        reason='freeipa ticket 9135', strict=True)
+     @server_install_setup
+     def test_number_of_zones(self):
+         """There should be two zones: one forward, one reverse"""
+ 
++        # Removed xfail for test_number_of_zones
++        # This test is xpass when executed in IdM-CI
++        # but still failing in PRCI. There is a different configuration
++        # in the 2 CIs and with this we will get a green test
++        # in IdM-CI nightly tests.
++
+         self.create_pkcs12('ca1/server')
+         self.prepare_cacert('ca1')
+ 
+-- 
+2.51.0
+
+
+From 1f915d4b2a1793a0a3e536604643f80aa76b6b0c Mon Sep 17 00:00:00 2001
+From: Anuja More <amore@redhat.com>
+Date: Fri, 23 Aug 2024 15:08:57 +0530
+Subject: [PATCH 24/47] ipatests: Update ipatests to test topology with
+ multiple domain.
+
+Added changes in ipatests so that ipa server-replica-client
+can be installed with two domain - ipa.test and trustedipa.test
+
+Related: https://pagure.io/freeipa/issue/9657
+
+Signed-off-by: Anuja More <amore@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipatests/pytest_ipa/integration/__init__.py   | 34 ++++++++-
+ ipatests/pytest_ipa/integration/config.py     | 30 +++++++-
+ ipatests/test_integration/base.py             | 71 +++++++++++++++++++
+ .../test_integration/test_multidomain_ipa.py  | 54 ++++++++++++++
+ pylint_plugins.py                             | 12 ++++
+ 5 files changed, 198 insertions(+), 3 deletions(-)
+ create mode 100644 ipatests/test_integration/test_multidomain_ipa.py
+
+diff --git a/ipatests/pytest_ipa/integration/__init__.py b/ipatests/pytest_ipa/integration/__init__.py
+index eb032cd72..31e909160 100644
+--- a/ipatests/pytest_ipa/integration/__init__.py
++++ b/ipatests/pytest_ipa/integration/__init__.py
+@@ -415,6 +415,16 @@ def mh(request, class_integration_logs):
+             'type': 'AD_TREEDOMAIN',
+             'hosts': {'ad_treedomain': 1}
+         })
++    for _i in range(cls.num_trusted_domains):
++        domain_descriptions.append({
++            'type': 'TRUSTED_IPA',
++            'hosts':
++            {
++                'master': 1,
++                'replica': cls.num_trusted_replicas,
++                'client': cls.num_trusted_clients,
++            }
++        })
+ 
+     mh = make_multihost_fixture(
+         request,
+@@ -423,10 +433,20 @@ def mh(request, class_integration_logs):
+         _config=get_global_config(),
+     )
+ 
+-    mh.domain = mh.config.domains[0]
++    for domain in mh.config.domains:
++        if domain.type == 'IPA':
++            mh.domain = domain
++        elif domain.type == 'TRUSTED_IPA':
++            mh.trusted_domain = domain
++
+     [mh.master] = mh.domain.hosts_by_role('master')
+     mh.replicas = mh.domain.hosts_by_role('replica')
+     mh.clients = mh.domain.hosts_by_role('client')
++    if mh.config.trusted_domains:
++        [mh.trusted_master] = mh.trusted_domain.hosts_by_role('master')
++        mh.trusted_replicas = mh.trusted_domain.hosts_by_role('replica')
++        mh.trusted_clients = mh.trusted_domain.hosts_by_role('client')
++
+     ad_domains = mh.config.ad_domains
+     if ad_domains:
+         mh.ads = []
+@@ -489,6 +509,12 @@ def add_compat_attrs(cls, mh):
+         cls.ad_subdomains = mh.ad_subdomains
+         cls.ad_treedomains = mh.ad_treedomains
+ 
++    cls.trusted_domains = mh.config.trusted_domains
++    if cls.trusted_domains:
++        cls.trusted_master = mh.trusted_master
++        cls.trusted_replicas = mh.trusted_replicas
++        cls.trusted_clients = mh.trusted_clients
++
+ 
+ def del_compat_attrs(cls):
+     """Remove convenience attributes from the test class
+@@ -506,6 +532,12 @@ def del_compat_attrs(cls):
+         del cls.ad_treedomains
+     del cls.ad_domains
+ 
++    if cls.trusted_domains:
++        del cls.trusted_master
++        del cls.trusted_replicas
++        del cls.trusted_clients
++    del cls.trusted_domains
++
+ 
+ def skip_if_fips(reason='Not supported in FIPS mode', host='master'):
+     if callable(reason):
+diff --git a/ipatests/pytest_ipa/integration/config.py b/ipatests/pytest_ipa/integration/config.py
+index 1f4dff7f6..0fb2313db 100644
+--- a/ipatests/pytest_ipa/integration/config.py
++++ b/ipatests/pytest_ipa/integration/config.py
+@@ -88,13 +88,19 @@ class Config(pytest_multihost.config.Config):
+     def ad_domains(self):
+         return [d for d in self.domains if d.is_ad_type]
+ 
++    @property
++    def trusted_domains(self):
++        return [d for d in self.domains if d.is_trusted_ipa_type]
++
+     def get_all_hosts(self):
+         for domain in self.domains:
+             for host in domain.hosts:
+                 yield host
+ 
+     def get_all_ipa_hosts(self):
+-        for ipa_domain in (d for d in self.domains if d.is_ipa_type):
++        for ipa_domain in (d for d in self.domains
++                           if d.is_ipa_type or d.is_trusted_ipa_type
++                           ):
+             for ipa_host in ipa_domain.hosts:
+                 yield ipa_host
+ 
+@@ -135,7 +141,7 @@ class Domain(pytest_multihost.config.Domain):
+         self.name = str(name)
+         self.hosts = []
+ 
+-        assert self.is_ipa_type or self.is_ad_type
++        assert self.is_ipa_type or self.is_ad_type or self.is_trusted_ipa_type
+         self.realm = self.name.upper()
+         self.basedn = DN(*(('dc', p) for p in name.split('.')))
+ 
+@@ -143,6 +149,10 @@ class Domain(pytest_multihost.config.Domain):
+     def is_ipa_type(self):
+         return self.type == 'IPA'
+ 
++    @property
++    def is_trusted_ipa_type(self):
++        return self.type == 'TRUSTED_IPA'
++
+     @property
+     def is_ad_type(self):
+         return self.type == 'AD' or self.type.startswith('AD_')
+@@ -158,6 +168,8 @@ class Domain(pytest_multihost.config.Domain):
+             return ('ad_subdomain',)
+         elif self.type == 'AD_TREEDOMAIN':
+             return ('ad_treedomain',)
++        elif self.type == 'TRUSTED_IPA':
++            return ('trusted_master', 'trusted_replica', 'trusted_client')
+         else:
+             raise LookupError(self.type)
+ 
+@@ -168,6 +180,8 @@ class Domain(pytest_multihost.config.Domain):
+             return Host
+         elif self.is_ad_type:
+             return WinHost
++        elif self.is_trusted_ipa_type:
++            return Host
+         else:
+             raise LookupError(self.type)
+ 
+@@ -175,6 +189,10 @@ class Domain(pytest_multihost.config.Domain):
+     def master(self):
+         return self.host_by_role('master')
+ 
++    @property
++    def trusted_master(self):
++        return self.host_by_role('trusted_master')
++
+     @property
+     def masters(self):
+         return self.hosts_by_role('master')
+@@ -183,10 +201,18 @@ class Domain(pytest_multihost.config.Domain):
+     def replicas(self):
+         return self.hosts_by_role('replica')
+ 
++    @property
++    def trusted_replicas(self):
++        return self.hosts_by_role('replica')
++
+     @property
+     def clients(self):
+         return self.hosts_by_role('client')
+ 
++    @property
++    def trusted_clients(self):
++        return self.hosts_by_role('client')
++
+     @property
+     def ads(self):
+         return self.hosts_by_role('ad')
+diff --git a/ipatests/test_integration/base.py b/ipatests/test_integration/base.py
+index 4717667cb..cb34067d4 100644
+--- a/ipatests/test_integration/base.py
++++ b/ipatests/test_integration/base.py
+@@ -33,6 +33,7 @@ class IntegrationTest:
+     num_replicas = 0
+     num_clients = 0
+     num_ad_domains = 0
++    num_trusted_domains = 0
+     num_ad_subdomains = 0
+     num_ad_treedomains = 0
+     required_extra_roles = []
+@@ -95,6 +96,7 @@ class IntegrationTest:
+                                cls.clients, domain_level,
+                                random_serial=cls.random_serial,
+                                extra_args=extra_args,)
++
+     @classmethod
+     def uninstall(cls, mh):
+         for replica in cls.replicas:
+@@ -112,3 +114,72 @@ class IntegrationTest:
+             tasks.uninstall_client(client)
+         if cls.fips_mode:
+             cls.disable_fips_mode()
++
++
++@ordered
++@pytest.mark.usefixtures('mh')
++@pytest.mark.usefixtures('integration_logs')
++class MultiDomainIntegrationTest(IntegrationTest):
++    num_trusted_domains = 1
++    num_trusted_replicas = 0
++    num_trusted_clients = 0
++
++    @classmethod
++    def get_domains(cls):
++        return super(MultiDomainIntegrationTest, cls
++                     ).get_domains() + cls.trusted_domains
++
++    @classmethod
++    def install(cls, mh):
++        super(MultiDomainIntegrationTest, cls).install(mh)
++        extra_args = []
++        if cls.topology is None:
++            return
++        else:
++            if cls.token_password:
++                extra_args.extend(('--token-password', cls.token_password,))
++            tasks.install_topo(cls.topology,
++                               cls.trusted_master, cls.trusted_replicas,
++                               cls.trusted_clients, 1,
++                               random_serial=cls.random_serial,
++                               extra_args=extra_args,)
++        tasks.kinit_admin(cls.master)
++        tasks.kinit_admin(cls.trusted_master)
++        # Now enable dnssec on the zones
++        cls.master.run_command([
++            "ipa-dns-install",
++            "--dnssec-master",
++            "--forwarder", cls.master.config.dns_forwarder,
++            "-U",
++        ])
++        cls.master.run_command([
++            "ipa", "dnszone-mod", cls.master.domain.name,
++            "--dnssec=True"
++        ])
++        cls.trusted_master.run_command([
++            "ipa-dns-install",
++            "--dnssec-master",
++            "--forwarder", cls.trusted_master.config.dns_forwarder,
++            "-U",
++        ])
++        cls.trusted_master.run_command([
++            "ipa", "dnszone-mod", cls.trusted_master.domain.name,
++            "--dnssec=True"
++        ])
++
++    @classmethod
++    def uninstall(cls, mh):
++        super(MultiDomainIntegrationTest, cls).uninstall(mh)
++        for trustedreplica in cls.trusted_replicas:
++            try:
++                tasks.run_server_del(
++                    cls.trusted_master, trustedreplica.hostname, force=True,
++                    ignore_topology_disconnect=True, ignore_last_of_role=True)
++            except subprocess.CalledProcessError:
++                # If the master has already been uninstalled,
++                # this call may fail
++                pass
++            tasks.uninstall_master(trustedreplica)
++        tasks.uninstall_master(cls.trusted_master)
++        for client in cls.trusted_clients:
++            tasks.uninstall_client(client)
+diff --git a/ipatests/test_integration/test_multidomain_ipa.py b/ipatests/test_integration/test_multidomain_ipa.py
+new file mode 100644
+index 000000000..b1a39a072
+--- /dev/null
++++ b/ipatests/test_integration/test_multidomain_ipa.py
+@@ -0,0 +1,54 @@
++from ipatests.pytest_ipa.integration import tasks
++from ipatests.test_integration.base import MultiDomainIntegrationTest
++
++
++class TestMultidomain(MultiDomainIntegrationTest):
++    num_clients = 1
++    num_replicas = 1
++    num_trusted_clients = 1
++    num_trusted_replicas = 1
++    topology = 'line'
++
++    def test_multidomain_trust(self):
++        """
++        Test services on multidomain topology.
++        """
++
++        for host in (self.master, self.replicas[0],
++                     self.trusted_master, self.trusted_replicas[0]
++                     ):
++            tasks.start_ipa_server(host)
++
++        for host in (self.master, self.trusted_master):
++            tasks.disable_dnssec_validation(host)
++            tasks.restart_named(host)
++
++        for host in (self.master, self.replicas[0],
++                     self.trusted_master, self.trusted_replicas[0],
++                     self.clients[0], self.trusted_clients[0]
++                     ):
++            tasks.kinit_admin(host)
++
++        # Add DNS forwarder to trusted domain on ipa domain
++        self.master.run_command([
++            "ipa", "dnsforwardzone-add", self.trusted_master.domain.name,
++            "--forwarder", self.trusted_master.ip,
++            "--forward-policy=only"
++        ])
++        self.trusted_master.run_command([
++            "ipa", "dnsforwardzone-add", self.master.domain.name,
++            "--forwarder", self.master.ip,
++            "--forward-policy=only"
++        ])
++
++        tasks.install_adtrust(self.master)
++        tasks.install_adtrust(self.trusted_master)
++
++        #  Establish trust
++        # self.master.run_command([
++        #     "ipa", "trust-add", "--type=ipa",
++        #     "--admin", "admin@{}".format(self.trusted_master.domain.realm),
++        #     "--range-type=ipa-ad-trust-posix",
++        #     "--password", "--two-way=true",
++        #     self.trusted_master.domain.name
++        # ], stdin_text=self.trusted_master.config.admin_password)
+diff --git a/pylint_plugins.py b/pylint_plugins.py
+index d75da3f4a..75d65f016 100644
+--- a/pylint_plugins.py
++++ b/pylint_plugins.py
+@@ -566,6 +566,7 @@ AstroidBuilder(MANAGER).string_build(
+     textwrap.dedent(
+         """\
+     from ipatests.test_integration.base import IntegrationTest
++    from ipatests.test_integration.base import MultiDomainIntegrationTest
+     from ipatests.pytest_ipa.integration.host import Host, WinHost
+     from ipatests.pytest_ipa.integration.config import Config, Domain
+ 
+@@ -584,6 +585,9 @@ AstroidBuilder(MANAGER).string_build(
+         def __getitem__(self, key):
+             return Domain()
+ 
++    class PylintTrustedDomains:
++        def __getitem__(self, key):
++            return Domain()
+ 
+     Host.config = Config()
+     Host.domain = Domain()
+@@ -596,6 +600,14 @@ AstroidBuilder(MANAGER).string_build(
+     IntegrationTest.ad_treedomains = PylintWinHosts()
+     IntegrationTest.ad_subdomains = PylintWinHosts()
+     IntegrationTest.ad_domains = PylintADDomains()
++    MultiDomainIntegrationTest.domain = Domain()
++    MultiDomainIntegrationTest.master = Host()
++    MultiDomainIntegrationTest.replicas = PylintIPAHosts()
++    MultiDomainIntegrationTest.clients = PylintIPAHosts()
++    MultiDomainIntegrationTest.trusted_master = Host()
++    MultiDomainIntegrationTest.trusted_replicas = PylintIPAHosts()
++    MultiDomainIntegrationTest.trusted_clients = PylintIPAHosts()
++    MultiDomainIntegrationTest.trusted_domains = PylintTrustedDomains()
+     """
+     )
+ )
+-- 
+2.51.0
+
+
+From 902dbeb67e0574dca4c761d058b43af3ac2cef6a Mon Sep 17 00:00:00 2001
+From: Anuja More <amore@redhat.com>
+Date: Mon, 26 May 2025 20:27:02 +0530
+Subject: [PATCH 25/47] ipatests: Add comprehensive tests for
+ ipa-client-automount --domain option
+
+- Add parametrized test for domain validation covering valid/invalid formats
+- Add cross-domain discovery test showing --domain enables discovery when
+  client is in different domain than IPA domain
+- Validate configuration in sssd.conf after successful automount setup
+
+The new tests ensure --domain option works correctly and provides proper
+hints for DNS discovery in cross-domain scenarios, reducing user friction
+compared to requiring --server specification.
+
+Related: https://pagure.io/freeipa/issue/9780
+
+Signed-off-by: Anuja More <amore@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ .../nightly_ipa-4-12_latest.yaml              |  17 ++
+ .../nightly_ipa-4-12_latest_selinux.yaml      |  18 ++
+ ipatests/prci_definitions/temp_commit.yaml    |   4 +
+ ipatests/test_integration/test_nfs.py         | 215 ++++++++++++++++--
+ ipatests/test_ipalib/test_util.py             |  21 +-
+ 5 files changed, 255 insertions(+), 20 deletions(-)
+
+diff --git a/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml b/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml
+index bc2a10de4..198c6acec 100644
+--- a/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml
++++ b/ipatests/prci_definitions/nightly_ipa-4-12_latest.yaml
+@@ -43,6 +43,10 @@ topologies:
+     name: ad_master_1repl_1client
+     cpu: 6
+     memory: 12096
++  ipa_ipa_trust: &ipa_ipa_trust
++    name: ipa_ipa_trust
++    cpu: 7
++    memory: 14750
+ 
+ jobs:
+   fedora-latest-ipa-4-12/build:
+@@ -59,6 +63,19 @@ jobs:
+         timeout: 1800
+         topology: *build
+ 
++  fedora-latest-ipa-4-12/nfs_automountdiscovery:
++    requires: [fedora-latest-ipa-4-12/build]
++    priority: 50
++    job:
++      class: RunPytest
++      args:
++        build_url: '{fedora-latest-ipa-4-12/build_url}'
++        test_suite: test_integration/test_nfs.py::TestIpaClientAutomountDiscovery
++        trusted_domain: True
++        template: *ci-ipa-4-12-latest
++        timeout: 3600
++        topology: *ipa_ipa_trust
++
+   fedora-latest-ipa-4-12/simple_replication:
+     requires: [fedora-latest-ipa-4-12/build]
+     priority: 50
+diff --git a/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml b/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml
+index fc31186df..8f01bb841 100644
+--- a/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml
++++ b/ipatests/prci_definitions/nightly_ipa-4-12_latest_selinux.yaml
+@@ -43,6 +43,10 @@ topologies:
+     name: ad_master_1repl_1client
+     cpu: 6
+     memory: 12096
++  ipa_ipa_trust: &ipa_ipa_trust
++    name: ipa_ipa_trust
++    cpu: 7
++    memory: 14750
+ 
+ jobs:
+   fedora-latest-ipa-4-12/build:
+@@ -59,6 +63,20 @@ jobs:
+         timeout: 1800
+         topology: *build
+ 
++  fedora-latest-ipa-4-12/nfs_automountdiscovery:
++    requires: [fedora-latest-ipa-4-12/build]
++    priority: 50
++    job:
++      class: RunPytest
++      args:
++        build_url: '{fedora-latest-ipa-4-12/build_url}'
++        selinux_enforcing: True
++        test_suite: test_integration/test_nfs.py::TestIpaClientAutomountDiscovery
++        trusted_domain: True
++        template: *ci-ipa-4-12-latest
++        timeout: 3600
++        topology: *ipa_ipa_trust
++
+   fedora-latest-ipa-4-12/simple_replication:
+     requires: [fedora-latest-ipa-4-12/build]
+     priority: 50
+diff --git a/ipatests/prci_definitions/temp_commit.yaml b/ipatests/prci_definitions/temp_commit.yaml
+index 24b7b4c48..036a1f495 100644
+--- a/ipatests/prci_definitions/temp_commit.yaml
++++ b/ipatests/prci_definitions/temp_commit.yaml
+@@ -49,6 +49,10 @@ topologies:
+     name: ad_master_1repl_1client
+     cpu: 6
+     memory: 12096
++  ipa_ipa_trust: &ipa_ipa_trust
++    name: ipa_ipa_trust
++    cpu: 7
++    memory: 14750
+ 
+ jobs:
+   fedora-latest-ipa-4-12/build:
+diff --git a/ipatests/test_integration/test_nfs.py b/ipatests/test_integration/test_nfs.py
+index 32d107b71..49a86fc8e 100644
+--- a/ipatests/test_integration/test_nfs.py
++++ b/ipatests/test_integration/test_nfs.py
+@@ -21,15 +21,35 @@ import time
+ 
+ import pytest
+ 
+-from ipatests.test_integration.base import IntegrationTest
++from ipaplatform.paths import paths
++from ipatests.test_integration.base import (
++    IntegrationTest, MultiDomainIntegrationTest)
+ from ipatests.pytest_ipa.integration import tasks
+-
+ # give some time for units to stabilize
+ # otherwise we get transient errors
+ WAIT_AFTER_INSTALL = 5
+ WAIT_AFTER_UNINSTALL = WAIT_AFTER_INSTALL
+ 
+ 
++def remove_automount(host):
++    time.sleep(WAIT_AFTER_INSTALL)
++    host.run_command([
++        'ipa-client-automount', '--uninstall', '-U'
++    ], raiseonerr=False)
++    time.sleep(WAIT_AFTER_UNINSTALL)
++
++
++def add_automount(host, extra_args, raiseonerr=False):
++    time.sleep(WAIT_AFTER_UNINSTALL)
++    args = [
++        "ipa-client-automount",
++    ]
++    args.extend(extra_args)
++    ret = host.run_command(args, raiseonerr=raiseonerr)
++    time.sleep(WAIT_AFTER_INSTALL)
++    return ret
++
++
+ class TestNFS(IntegrationTest):
+ 
+     num_clients = 3
+@@ -357,25 +377,184 @@ class TestIpaClientAutomountFileRestore(IntegrationTest):
+         self.nsswitch_backup_restore()
+ 
+ 
+-class TestIpaClientAutomountDiscovery(IntegrationTest):
++class TestIpaClientAutomountDiscovery(MultiDomainIntegrationTest):
+ 
++    num_replicas = 0
++    num_trusted_replicas = 0
+     num_clients = 1
+-    topology = 'line'
++    num_trusted_clients = 1
++    topology = "line"
++
++    def test_automount_valid_domain(self):
++        """Test that --domain option controls which domain is used
++        for DNS SRV record lookup.
+ 
+-    def test_automount_invalid_domain(self):
+-        """Validate that the --domain option is passed into
+-           Discovery. This is expected to fail discovery.
++        Without --domain: client searches in its local domain (fails if no
++        IPA records) With --domain: client searches in the specified
++        domain (succeeds for IPA domain)
+         """
+-        testdomain = "client.test"
+-        msg1 = f"Search for LDAP SRV record in {testdomain}"
+-        msg2 = f"Search DNS for SRV record of _ldap._tcp.{testdomain}"
+-        msg3 = "Autodiscovery did not find LDAP server"
++        testdomain1 = self.master.domain.name
++        client2 = self.trusted_clients[0]
++        tasks.uninstall_client(client2)
++        client2.run_command(["ipa-client-install", "--domain", testdomain1,
++                             "--realm", self.master.domain.realm,
++                             "--server", self.master.hostname,
++                             "-p", client2.config.admin_name, "-w",
++                             client2.config.admin_password, "-U"]
++                            )
++        result = add_automount(
++            client2, extra_args=['--debug', '-U']
++        )
++        msg = "Search DNS for SRV record of _ldap._tcp.{0}"
++        assert msg.format(client2.domain.name) in result.stderr_text
++        remove_automount(client2)
++        result2 = add_automount(
++            client2, extra_args=['--debug', '--domain', testdomain1, '-U']
++        )
++        assert msg.format(testdomain1) in result2.stderr_text
+ 
++    @pytest.mark.parametrize(
++        "domain_input,expected_success,test_description", [
++            ("{ipa_domain}", True, "valid IPA domain should succeed"),
++            ("client.test", False, "non-IPA domain should fail discovery"),
++            ("  example.com  ", True, "whitespace should be trimmed"),
++            ("EXAMPLE.COM", True, "uppercase should work"),
++
++        ])
++    def test_automount_domain_option_integration(
++            self, domain_input, expected_success, test_description):
++        """Test for --domain affects DNS discovery and system integration.
++
++        This test verifies that the --domain option actually changes the DNS
++        discovery behavior and system configuration, not just input validation.
++
++        Test cases:
++        - Valid IPA domain: Should successfully discover IPA services and
++          configure automount correctly
++        - Non-IPA domain: Should fail discovery since no IPA DNS records
++          exist in that domain
++        """
++        client = self.clients[0]
++        ipa_domain = self.master.domain.name
++
++        # Replace placeholders in domain_input
++        domain_to_test = domain_input.format(ipa_domain=ipa_domain)
++
++        if expected_success:
++            # Should succeed
++            add_automount(
++                client, extra_args=['--domain', domain_to_test,
++                                    '--debug', '-U']
++            )
++            # Verify configuration if successful
++            sssd_conf = client.get_file_contents(
++                paths.SSSD_CONF).decode()
++            assert "autofs_provider = ipa" in sssd_conf, \
++                "Autofs provider should be set to ipa"
++            # Clean up
++            remove_automount(client)
++        else:
++            # Should fail
++            result = client.run_command([
++                'ipa-client-automount', '--domain', domain_to_test,
++                '--debug'
++            ], stdin_text="n", raiseonerr=False)
++            assert (
++                result.returncode != 0
++                or "Autodiscovery did not find LDAP server" in
++                result.stderr_text
++                or "Invalid domain" in result.stderr_text
++            ), f"Should have failed: {test_description}"
++
++    def test_automount_domain_option_overrides_discovery(self):
++        """Test that explicit --domain option overrides automatic discovery."""
+         client = self.clients[0]
+-        result = client.run_command([
+-            'ipa-client-automount', '--domain', 'client.test',
+-            '--debug'
+-        ], stdin_text="n", raiseonerr=False)
+-        assert msg1 in result.stderr_text
+-        assert msg2 in result.stderr_text
+-        assert msg3 in result.stderr_text
++        ipa_domain = self.master.domain.name
++
++        # First install without domain to establish baseline
++        result_auto = add_automount(client, extra_args=['--debug', '-U'])
++        assert "Search DNS for SRV record" in result_auto.stderr_text
++        remove_automount(client)
++
++        # Now with explicit domain
++        result_explicit = add_automount(
++            client, extra_args=['--domain', ipa_domain, '--debug', '-U']
++        )
++        explicit_domain_msg = (
++            f"Using domain '{ipa_domain}'" in result_explicit.stderr_text
++            or f"Search DNS for SRV record of _ldap._tcp.{ipa_domain}"
++            in result_explicit.stderr_text
++        )
++
++        assert explicit_domain_msg, \
++            "Explicit domain should override automatic discovery"
++
++        # Final cleanup
++        remove_automount(client)
++
++    def test_automount_domain_hint_for_cross_domain_discovery(self):
++        """Test that --domain option enables discovery when client is in
++           a different domain than the IPA domain.
++        """
++        client = self.clients[0]
++        other_domain = self.trusted_master.domain.name
++        tasks.uninstall_client(client)
++        # Add DNS forwarder
++        self.master.run_command([
++            "ipa", "dnsforwardzone-add", self.trusted_master.domain.name,
++            "--forwarder", self.trusted_master.ip,
++            "--forward-policy=only"
++        ])
++        self.trusted_master.run_command([
++            "ipa", "dnsforwardzone-add", self.master.domain.name,
++            "--forwarder", self.master.ip,
++            "--forward-policy=only"
++        ])
++        # Backup original resolv.conf
++        tasks.backup_file(client, paths.RESOLV_CONF)
++
++        try:
++            # Install client in a domain other than the IPA domain
++            non_ipa_resolv_conf = f"""search {other_domain}
++nameserver {self.trusted_master.ip}
++"""
++            client.put_file_contents(paths.RESOLV_CONF, non_ipa_resolv_conf)
++
++            # Ensure client is installed for the test
++            tasks.uninstall_client(client)
++            client.run_command(["ipa-client-install", "--domain", other_domain,
++                                "--realm", self.trusted_master.domain.realm,
++                                "--server", self.trusted_master.hostname,
++                                "-p", client.config.admin_name, "-w",
++                                client.config.admin_password, "-U"]
++                               )
++            # Verify DNS discovery will fail when client is in Non-IPA domain
++            # Attempt automount with --domain hint (should succeed)
++            nodomain = add_automount(
++                client, extra_args=['--debug', '-U']
++            )
++            # Verify discovery fails.
++            assert "DNS record not found" in nodomain.stderr_text
++            remove_automount(client)
++
++            # Attempt automount with --domain hint (should succeed)
++            withdomain = add_automount(
++                client, extra_args=['--domain', other_domain,
++                                    '--debug', '-U']
++            )
++            # Verify discovery finds a IPA server.
++            assert "DNS record found" in withdomain.stderr_text
++            ipa_discovery = (
++                f"Validated servers: {self.trusted_master.hostname}"
++                in withdomain.stderr_text
++            )
++            assert ipa_discovery, \
++                "Autodiscovery success"
++            # Verify configuration was applied correctly
++            sssd_conf = client.get_file_contents(paths.SSSD_CONF).decode()
++            assert "autofs_provider = ipa" in sssd_conf, \
++                "Autofs provider should be configured"
++        finally:
++            # Cleanup: restore original resolv.conf and uninstall
++            tasks.restore_files(client)
++            remove_automount(client)
+diff --git a/ipatests/test_ipalib/test_util.py b/ipatests/test_ipalib/test_util.py
+index 74a32b72c..ba1b9f120 100644
+--- a/ipatests/test_ipalib/test_util.py
++++ b/ipatests/test_ipalib/test_util.py
+@@ -11,8 +11,10 @@ from unittest import mock
+ import pytest
+ 
+ from ipalib.util import (
+-    get_pager, create_https_connection, get_proper_tls_version_span
++    get_pager, create_https_connection, get_proper_tls_version_span,
++    validate_domain_name
+ )
++
+ from ipaplatform.constants import constants
+ 
+ 
+@@ -27,7 +29,7 @@ from ipaplatform.constants import constants
+ def test_get_pager(pager, expected_result):
+     with mock.patch.dict(os.environ, {'PAGER': pager}):
+         pager = get_pager()
+-        assert(pager == expected_result or pager.endswith(expected_result))
++        assert (pager == expected_result or pager.endswith(expected_result))
+ 
+ 
+ BASE_CTX = ssl.SSLContext(ssl.PROTOCOL_TLS)
+@@ -75,3 +77,18 @@ def test_tls_version_span(minver, maxver, opt, expected):
+     ctx = getattr(conn, "_context")
+     assert ctx.options == BASE_OPT | opt
+     assert ctx.get_ciphers() == BASE_CTX.get_ciphers()
++
++
++@pytest.mark.parametrize("domain_input,expected_valid,description", [
++    ("invalid..domain", False, "double dots should be rejected"),
++    (".invalid.domain", False, "leading dot should be rejected"),
++    ("invalid domain with spaces", False, "spaces should be rejected"),
++    ("toolong" + "x" * 250 + ".domain", False, "overly long domain rejected"),
++    ("", False, "empty string should be rejected"),
++    ("single", False, "single label should be rejected"),
++])
++def test_validate_domain_name(domain_input, expected_valid, description):
++    """Test domain name validation logic in ipalib.util.validate_domain_name"""
++
++    with pytest.raises((ValueError, TypeError)):
++        validate_domain_name(domain_input)
+-- 
+2.51.0
+
+
+From 09acc861692d265b72d058192f9dd6f07581839c Mon Sep 17 00:00:00 2001
+From: Sam Morris <sam@robots.org.uk>
+Date: Thu, 31 Jul 2025 15:52:37 +0100
+Subject: [PATCH 26/47] Fix ipa-client-install failure when a trusted CA's
+ distinguished name contains slash characters
+
+Fixes: https://pagure.io/freeipa/issue/8924
+Signed-off-by: Sam Morris <sam@robots.org.uk>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+---
+ ipaplatform/debian/tasks.py | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/ipaplatform/debian/tasks.py b/ipaplatform/debian/tasks.py
+index 8a50c66bc..b56b5a26b 100644
+--- a/ipaplatform/debian/tasks.py
++++ b/ipaplatform/debian/tasks.py
+@@ -146,9 +146,15 @@ used by ca-certificates and is provided for information only.\
+             # CAs who used the same serial number?)
+             filename = f'{subject.ldap_text()} {cert.serial_number}.crt'
+ 
+-            # pylint: disable=old-division
+-            cert_path = path / filename
+-            # pylint: enable=old-division
++            # Some CAs have DNs with a / or NUL character, which are not legal
++            # in paths. Also escape some other annoying characters for good
++            # measure.
++            bad_chars = {'\0', '/', ':'}
++            safe_filename = ''.join(
++                ('-' if c in bad_chars else c for c in filename)
++            )
++
++            cert_path = os.path.join(path, safe_filename)
+             try:
+                 f = open(cert_path, 'w')
+             except Exception:
+-- 
+2.51.0
+
+
+From 72e1a1db6eb762811e37e5b4d929b47b4a69f006 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Mon, 25 Aug 2025 15:32:38 +0200
+Subject: [PATCH 27/47] Spec file: bump samba version to 4.23.0 in f43 and
+ above
+
+Fixes: https://pagure.io/freeipa/issue/9843
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+---
+ freeipa.spec.in | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/freeipa.spec.in b/freeipa.spec.in
+index 1cb3d0233..5d5d75a49 100755
+--- a/freeipa.spec.in
++++ b/freeipa.spec.in
+@@ -109,7 +109,17 @@
+ %global python_netaddr_version 0.7.16
+ # Require 4.7.0 which brings Python 3 bindings
+ # Require 4.12 which has DsRGetForestTrustInformation access rights fixes
++%if 0%{?fedora} <= 40
+ %global samba_version 2:4.12.10
++%elif 0%{?fedora} == 41
++# Require 4.20.0 or later for libndr4, latest F41 is 4.21.7 already
++%global samba_version 2:4.21.7
++%elif 0%{?fedora} == 42
++%global samba_version 2:4.22.0
++%else
++# Require 4.23 for passdb ABI bump
++%global samba_version 2:4.23.0
++%endif
+ 
+ # 3.14.5-45 or later includes a number of interfaces fixes for IPA interface
+ # 36.16-1 fixes BZ#2115691
+-- 
+2.51.0
+
+
+From bc3c095d74c2d56a20346db878e8c724a2cfd227 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Wed, 27 Aug 2025 17:18:57 +0200
+Subject: [PATCH 28/47] DNS over TLS: use system trust store
+
+When a client or server is configured with DoT, the installer
+creates /etc/unbound/conf.d/zzz-ipa.conf with
+    tls-cert-bundle: /etc/pki/tls/certs/ca-bundle.crt
+
+This certificate bundle does not exist any more in fedora 43+
+(https://fedoraproject.org/wiki/Changes/droppingOfCertPemFile)
+and the missing file prevents unbound service from starting.
+
+The configuration should rather set
+    tls-system-cert: yes
+in order to rely on the systemwide trust store.
+
+The upgrade is also handled by this change.
+
+Fixes: https://pagure.io/freeipa/issue/9838
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+---
+ client/share/unbound.conf.template |  2 +-
+ freeipa.spec.in                    | 11 +++++++++++
+ ipaclient/install/client.py        |  2 --
+ ipaserver/install/dns.py           |  2 --
+ 4 files changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/client/share/unbound.conf.template b/client/share/unbound.conf.template
+index f611ebb7e..9b1c983e5 100644
+--- a/client/share/unbound.conf.template
++++ b/client/share/unbound.conf.template
+@@ -1,5 +1,5 @@
+ server:
+-    tls-cert-bundle: $TLS_CERT_BUNDLE_PATH
++    tls-system-cert: yes
+     tls-upstream: yes
+     interface: 127.0.0.55
+     log-servfail: yes
+diff --git a/freeipa.spec.in b/freeipa.spec.in
+index 5d5d75a49..c8dc67f4f 100755
+--- a/freeipa.spec.in
++++ b/freeipa.spec.in
+@@ -1413,6 +1413,17 @@ if [ $1 -gt 1 ] ; then
+             fi
+         fi
+     fi
++
++    UNBOUND_CFG=/etc/unbound/conf.d/zzz-ipa.conf
++    if [ -f "$UNBOUND_CFG" -a $restore -ge 2 ]; then
++        # The client has been configured for Dot
++        # replace the line tls-cert-bundle: /etc/pki/tls/certs/ca-bundle.crt
++        # with tls-system-cert: yes
++        # See https://fedoraproject.org/wiki/Changes/droppingOfCertPemFile
++        if grep -E -q 'tls-cert-bundle: \/etc\/pki\/tls\/certs\/ca-bundle.crt'  $UNBOUND_CFG 2>/dev/null; then
++            sed -E --in-place=.orig 's/tls-cert-bundle: \/etc\/pki\/tls\/certs\/ca-bundle.crt/tls-system-cert: yes/' $UNBOUND_CFG
++        fi
++    fi
+ fi
+ 
+ 
+diff --git a/ipaclient/install/client.py b/ipaclient/install/client.py
+index 1885e4a8d..2a7f4b956 100644
+--- a/ipaclient/install/client.py
++++ b/ipaclient/install/client.py
+@@ -1692,8 +1692,6 @@ def client_dns(server, hostname, options, statestore):
+             paths.UNBOUND_CONF_SRC,
+             paths.UNBOUND_CONF,
+             dict(
+-                TLS_CERT_BUNDLE_PATH=os.path.join(
+-                    paths.OPENSSL_CERTS_DIR, "ca-bundle.crt"),
+                 FORWARD_ADDRS=forward_addr,
+                 MODULE_CONFIG_ITERATOR=module_config_iterator
+             )
+diff --git a/ipaserver/install/dns.py b/ipaserver/install/dns.py
+index 39c2f677b..72f9de07c 100644
+--- a/ipaserver/install/dns.py
++++ b/ipaserver/install/dns.py
+@@ -152,8 +152,6 @@ def _setup_dns_over_tls(options):
+         paths.UNBOUND_CONF_SRC,
+         paths.UNBOUND_CONF,
+         dict(
+-            TLS_CERT_BUNDLE_PATH=os.path.join(
+-                paths.OPENSSL_CERTS_DIR, "ca-bundle.crt"),
+             FORWARD_ADDRS="\n".join(forward_addrs),
+             MODULE_CONFIG_ITERATOR=module_config_iterator
+         )
+-- 
+2.51.0
+
+
+From 03f48bffdd82cc48b5952c112db2b024f085d5d4 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Thu, 4 Sep 2025 16:08:22 +0200
+Subject: [PATCH 29/47] xmlrpc test: fix test_find_orphan_automember_rules
+
+The test was written with a complex logic depending on the
+installed version of 389-ds. The command was expected to fail if
+version < 1.4.0.22.
+
+Fedora has been shipping the fixed version for a long time already,
+and the test can be simplified. Moreover, the code responsible
+for retrieving 389 ds version does not work for ds 3.1.3 which
+provides a vendorVersion attribute not compliant with python
+versioning schema.
+
+Fixes: https://pagure.io/freeipa/issue/9850
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+---
+ .../test_xmlrpc/test_automember_plugin.py     | 29 ++-----------------
+ 1 file changed, 2 insertions(+), 27 deletions(-)
+
+diff --git a/ipatests/test_xmlrpc/test_automember_plugin.py b/ipatests/test_xmlrpc/test_automember_plugin.py
+index 7fd6f6ca6..aa7c1d65a 100644
+--- a/ipatests/test_xmlrpc/test_automember_plugin.py
++++ b/ipatests/test_xmlrpc/test_automember_plugin.py
+@@ -35,8 +35,6 @@ from ipaserver.plugins.automember import REBUILD_TASK_CONTAINER
+ 
+ import time
+ import pytest
+-import re
+-from packaging.version import parse as parse_version
+ 
+ try:
+     from ipaserver.plugins.ldap2 import ldap2
+@@ -1492,31 +1490,8 @@ class TestAutomemberFindOrphans(XMLRPC_test):
+ 
+         hostgroup1.ensure_missing()
+ 
+-        # Test rebuild (is failing)
+-        # rebuild fails if 389-ds is older than 1.4.0.22 where unmembering
+-        # feature was implemented: https://pagure.io/389-ds-base/issue/50077
+-        if not have_ldap2:
+-            pytest.skip('server plugin not available')
+-        ldap = ldap2(api)
+-        ldap.connect()
+-        rootdse = ldap.get_entry(DN(''), ['vendorVersion'])
+-        version = rootdse.single_value.get('vendorVersion')
+-        # The format of vendorVersion is the following:
+-        # 389-Directory/1.3.8.4 B2019.037.1535
+-        # Extract everything between 389-Directory/ and ' B'
+-        mo = re.search(r'389-Directory/(.*) B', version)
+-        vendor_version = parse_version(mo.groups()[0])
+-        expected_failure = vendor_version < parse_version('1.4.0.22')
+-
+-        try:
+-            api.Command['automember_rebuild'](type=u'hostgroup')
+-        except errors.DatabaseError:
+-            rebuild_failure = True
+-        else:
+-            rebuild_failure = False
+-        if expected_failure != rebuild_failure:
+-            pytest.fail("unexpected result for automember_rebuild with "
+-                        "an orphan automember rule")
++        # Rebuild with a missing hostgroup
++        api.Command['automember_rebuild'](type=u'hostgroup')
+ 
+         # Find obsolete automember rules
+         result = api.Command['automember_find_orphans'](type=u'hostgroup')
+-- 
+2.51.0
+
+
+From 537e032aae5896b12f6d531291954839b790c712 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Tue, 9 Sep 2025 12:55:28 +0200
+Subject: [PATCH 30/47] azure webui tests: force chromium version
+
+azure webui tests are failing with chromium-140.0.7339.80-1.fc42
+Force to install an older version
+
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+---
+ ipatests/azure/templates/prepare-webui-fedora.yml | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/ipatests/azure/templates/prepare-webui-fedora.yml b/ipatests/azure/templates/prepare-webui-fedora.yml
+index 9e2d9361e..9590a7d62 100644
+--- a/ipatests/azure/templates/prepare-webui-fedora.yml
++++ b/ipatests/azure/templates/prepare-webui-fedora.yml
+@@ -1,5 +1,6 @@
+ steps:
+ - script: |
+     set -e
+-    sudo dnf -y install npm fontconfig gtk3 atk at-spi2-atk chromium
++    sudo dnf install -y chromium-134.0.6998.165-1.fc42
++    sudo dnf -y install npm fontconfig gtk3 atk at-spi2-atk
+   displayName: Install WebUI Unit tests prerequisites
+-- 
+2.51.0
+
+
+From b923355ff04dd88b1530d0bb2e032280afc5d315 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Tue, 26 Aug 2025 09:00:48 +0200
+Subject: [PATCH 31/47] ipatests: remove xfail for PKI 11.7
+
+The test test_ca_show_error_handling is green with PKI 11.7
+because the PKI regression has been fixed.
+Update the xfail condition to 11.5 <= version < 11.7.
+
+Fixes: https://pagure.io/freeipa/issue/9606
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Alexander Bokovoy <abbra@users.noreply.github.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipatests/test_integration/test_cert.py | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/ipatests/test_integration/test_cert.py b/ipatests/test_integration/test_cert.py
+index 05b20b910..84adf2cea 100644
+--- a/ipatests/test_integration/test_cert.py
++++ b/ipatests/test_integration/test_cert.py
+@@ -558,8 +558,10 @@ class TestCAShowErrorHandling(IntegrationTest):
+         )
+         error_msg = 'ipa: ERROR: The certificate for ' \
+                     '{} is not available on this server.'.format(lwca)
+-        bad_version = (tasks.get_pki_version(self.master)
+-                       >= tasks.parse_version('11.5.0'))
++        pki_version = tasks.get_pki_version(self.master)
++        # The regression was introduced in 11.5 and fixed in 11.7
++        bad_version = (tasks.parse_version('11.5.0') <= pki_version
++                       < tasks.parse_version('11.7.0'))
+         with xfail_context(bad_version,
+                            reason="https://pagure.io/freeipa/issue/9606"):
+             assert error_msg in result.stderr_text
+-- 
+2.51.0
+
+
+From 4a2e912d2386dfeb9765e32dd244b32b03cbf9a5 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Tue, 2 Sep 2025 10:05:31 +0200
+Subject: [PATCH 32/47] ipatests: fix test_certmonger_ipa_responder_jsonrpc
+
+Test scenario:
+- install IPA server and client
+- store the start date
+- request a certificate on the client using ipa-getcert
+- check in the journal after start date that the request was done using the
+https://.../ipa/json URI
+
+The test obtains the start date on the runner. As a consequence, if the runner
+is late compared to the client, it may miss the message in the journal.
+The date should rather be obtained on the client.
+
+Fixes: https://pagure.io/freeipa/issue/9848
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipatests/test_integration/test_cert.py | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/ipatests/test_integration/test_cert.py b/ipatests/test_integration/test_cert.py
+index 84adf2cea..ddc4e089a 100644
+--- a/ipatests/test_integration/test_cert.py
++++ b/ipatests/test_integration/test_cert.py
+@@ -13,7 +13,6 @@ import pytest
+ import random
+ import re
+ import string
+-import time
+ import textwrap
+ 
+ from ipaplatform.paths import paths
+@@ -70,9 +69,10 @@ class TestInstallMasterClient(IntegrationTest):
+     def install(cls, mh):
+         super().install(mh)
+ 
+-        # time to look into journal logs in
++        # store the start time to look into journal logs in
+         # test_certmonger_ipa_responder_jsonrpc
+-        cls.since = time.strftime('%Y-%m-%d %H:%M:%S')
++        result = cls.clients[0].run_command(['date', '+%Y-%m-%d %H:%M:%S'])
++        cls.since = result.stdout_text.strip()
+ 
+     def test_cacert_file_appear_with_option_F(self):
+         """Test if getcert creates cacert file with -F option
+-- 
+2.51.0
+
+
+From 9b631f80720fe1f2492d1a30bb1c2410af5eb587 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Wed, 3 Sep 2025 14:57:52 +0200
+Subject: [PATCH 33/47] ipatests: fix test_otp
+
+The test is performing ssh from the runner to the master
+but is using the external_hostname and randomly fails.
+
+Make sure to use the configured hostname instead.
+
+Fixes: https://pagure.io/freeipa/issue/9849
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipatests/test_integration/test_otp.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ipatests/test_integration/test_otp.py b/ipatests/test_integration/test_otp.py
+index 0babb4589..a4adeee69 100644
+--- a/ipatests/test_integration/test_otp.py
++++ b/ipatests/test_integration/test_otp.py
+@@ -504,7 +504,7 @@ class TestOTPToken(IntegrationTest):
+             )
+             with xfail_context(rhel_fail or fedora_fail, reason=github_ticket):
+                 result = ssh_2fa_with_cmd(master,
+-                                          self.master.external_hostname,
++                                          self.master.hostname,
+                                           USER3, PASSWORD, otpvalue=otpvalue,
+                                           command="klist")
+                 print(result.stdout_text)
+@@ -552,7 +552,7 @@ class TestOTPToken(IntegrationTest):
+             otpvalue = totp.generate(int(time.time())).decode('ascii')
+             tasks.clear_sssd_cache(self.master)
+             result = ssh_2fa_with_cmd(master,
+-                                      self.master.external_hostname,
++                                      self.master.hostname,
+                                       USER4, PASSWORD, otpvalue=otpvalue,
+                                       command="klist")
+             print(result.stdout_text)
+-- 
+2.51.0
+
+
+From 7d4b5541b2de30a91cd1f14b790bfa33dca8ea5f Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Mon, 8 Sep 2025 18:57:09 +0300
+Subject: [PATCH 34/47] dcerpc: make sure forest trust info structure version
+ is 1
+
+[MS-DRSR] 5.64 FOREST_TRUST_INFORMATION defines version of the
+ForestTrustInfo structure as 1. We didn't set it so it was defaulting to
+zero. Samba validates the version number and rejects ForestTrustInfo
+structures from FreeIPA.
+
+Make sure new structures are always set to version 1 and old strutures
+fixed up to have version 1.
+
+Fixes: https://pagure.io/freeipa/issue/9852
+
+Signed-off-by: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Julien Rische <jrische@redhat.com>
+---
+ daemons/ipa-sam/ipa_sam.c | 38 +++++++++++++++++++++++++++++++++++++-
+ ipaserver/dcerpc.py       |  1 +
+ 2 files changed, 38 insertions(+), 1 deletion(-)
+
+diff --git a/daemons/ipa-sam/ipa_sam.c b/daemons/ipa-sam/ipa_sam.c
+index 26f8e89ec..3b8fc90fb 100644
+--- a/daemons/ipa-sam/ipa_sam.c
++++ b/daemons/ipa-sam/ipa_sam.c
+@@ -30,6 +30,8 @@ char *smb_xstrdup(const char *s);
+ #include <smbldap.h>
+ 
+ #include <gen_ndr/samr.h>
++#include <gen_ndr/drsblobs.h>
++#include <gen_ndr/ndr_drsblobs.h>
+ 
+ #include <passdb.h>
+ 
+@@ -101,7 +103,6 @@ struct unixid {
+ 	enum id_type type;
+ }/* [public] */;
+ 
+-enum ndr_err_code ndr_pull_trustAuthInOutBlob(struct ndr_pull *ndr, int ndr_flags, struct trustAuthInOutBlob *r); /*available in libndr-samba.so */
+ bool sid_check_is_builtin(const struct dom_sid *sid); /* available in libpdb.so */
+ /* available in libpdb.so, renamed from sid_check_is_domain() in c43505b621725c9a754f0ee98318d451b093f2ed */
+ bool sid_linearize(char *outbuf, size_t len, const struct dom_sid *sid); /* available in libsmbconf.so */
+@@ -2422,6 +2423,36 @@ static bool get_uint32_t_from_ldap_msg(struct ipasam_private *ipasam_state,
+ 	return true;
+ }
+ 
++static bool repack_pdb_forest_trust_info(struct pdb_trusted_domain *td)
++{
++	struct ForestTrustInfo *fti = NULL;
++	enum ndr_err_code ndr_err = 0;
++	/*
++	 * Fix-up the version field as Samba expects it.
++	 * We need to unpack the blob, change, and pack it again
++	 */
++	fti = talloc(td, struct ForestTrustInfo);
++	if (fti == NULL) {
++	    return false;
++	}
++	ndr_err = ndr_pull_struct_blob_all(&td->trust_forest_trust_info, td, fti,
++					   (ndr_pull_flags_fn_t)ndr_pull_ForestTrustInfo);
++	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
++	    TALLOC_FREE(fti);
++	    return false;
++	}
++
++	fti->version = 1;
++
++	talloc_free(td->trust_forest_trust_info.data);
++	td->trust_forest_trust_info = data_blob_null;
++
++	ndr_err = ndr_push_struct_blob(&td->trust_forest_trust_info, td, fti,
++				       (ndr_push_flags_fn_t)ndr_push_ForestTrustInfo);
++	TALLOC_FREE(fti);
++	return NDR_ERR_CODE_IS_SUCCESS(ndr_err);
++}
++
+ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
+ 				    struct ipasam_private *ipasam_state,
+ 				    LDAPMessage *entry,
+@@ -2614,6 +2645,11 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
+ 					LDAP_ATTRIBUTE_TRUST_FOREST_TRUST_INFO,
+ 					&td->trust_forest_trust_info)) {
+ 		DEBUG(9, ("Failed to set forest trust info.\n"));
++	} else {
++		res = repack_pdb_forest_trust_info(td);
++		if (!res) {
++			return false;
++		}
+ 	}
+ 
+ 	*_td = td;
+diff --git a/ipaserver/dcerpc.py b/ipaserver/dcerpc.py
+index 3344ea226..b75c4fccf 100644
+--- a/ipaserver/dcerpc.py
++++ b/ipaserver/dcerpc.py
+@@ -1658,6 +1658,7 @@ def fetch_domains(api, mydomain, trustdomain, creds=None, server=None):
+ 
+     ftinfo.count = len(ftinfo_records)
+     ftinfo.records = ftinfo_records
++    ftinfo.version = 1
+     result['ftinfo_data'] = ndr_pack(ftinfo)
+     return result
+ 
+-- 
+2.51.0
+
+
+From 486558c63e4b0db6673e863a6bd89e885f8106dd Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Mon, 8 Sep 2025 18:59:50 +0300
+Subject: [PATCH 35/47] dcerpc: Support Samba 4.23
+
+Samba 4.23 ignores trust to PIM and 'within the forest' domains. It
+didn't know what to do with them in past as well but starting with 4.23
+the domain trust entries which have trust attributes with
+LSA_TRUST_ATTRIBUTE_PIM_TRUST and LSA_TRUST_ATTRIBUTE_WITHIN_FOREST bits
+set will be ignored.
+
+FreeIPA did default to LSA_TRUST_ATTRIBUTE_WITHIN_FOREST for domains
+stored with trusted attributes set to 0 or missing. This was behavior in
+past for Samba as well. Since FreeIPA only supports forest trust and an
+external trust, in both cases we should set explicit LSA trust attribute
+bits:
+ - LSA_TRUST_ATTRIBUTE_FOREST_TRANSITIVE for the forest trust
+ - LSA_TRUST_ATTRIBUTE_NON_TRANSITIVE for the external trust
+
+Fixes: https://pagure.io/freeipa/issue/9852
+
+Signed-off-by: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Julien Rische <jrische@redhat.com>
+---
+ daemons/ipa-sam/ipa_sam.c | 8 ++++----
+ ipaserver/dcerpc.py       | 2 ++
+ 2 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/daemons/ipa-sam/ipa_sam.c b/daemons/ipa-sam/ipa_sam.c
+index 3b8fc90fb..9fb4db4c5 100644
+--- a/daemons/ipa-sam/ipa_sam.c
++++ b/daemons/ipa-sam/ipa_sam.c
+@@ -2594,10 +2594,10 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
+ 		TALLOC_FREE(td);
+ 		return false;
+ 	}
+-	if (td->trust_attributes == 0) {
+-		/* attribute wasn't present, this is a subdomain within the
+-		 * parent forest */
+-		td->trust_attributes = LSA_TRUST_ATTRIBUTE_WITHIN_FOREST;
++	if (td->trust_attributes == 0 && (td->domain_name != dns_domain)) {
++                /* attribute wasn't present and this is not a subdomain within
++                 * the parent forest */
++		td->trust_attributes = LSA_TRUST_ATTRIBUTE_FOREST_TRANSITIVE;
+ 	}
+ 
+ 	res = get_uint32_t_from_ldap_msg(ipasam_state, entry,
+diff --git a/ipaserver/dcerpc.py b/ipaserver/dcerpc.py
+index b75c4fccf..1182f128b 100644
+--- a/ipaserver/dcerpc.py
++++ b/ipaserver/dcerpc.py
+@@ -1362,6 +1362,8 @@ class TrustDomainInstance:
+         info.trust_attributes = 0
+         if trust_external:
+             info.trust_attributes |= lsa.LSA_TRUST_ATTRIBUTE_NON_TRANSITIVE
++        else:
++            info.trust_attributes |= lsa.LSA_TRUST_ATTRIBUTE_FOREST_TRANSITIVE
+ 
+         try:
+             dname = lsa.String()
+-- 
+2.51.0
+
+
+From fcd0f0c6e07200e90628f108c7566b0ede7879b8 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Thu, 11 Sep 2025 13:52:41 +0300
+Subject: [PATCH 36/47] ipasam: simplify error handling in
+ fill_pdb_trusted_domain
+
+Related: https://pagure.io/freeipa/issue/9852
+
+Signed-off-by: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Julien Rische <jrische@redhat.com>
+---
+ daemons/ipa-sam/ipa_sam.c | 44 ++++++++++++++++++---------------------
+ 1 file changed, 20 insertions(+), 24 deletions(-)
+
+diff --git a/daemons/ipa-sam/ipa_sam.c b/daemons/ipa-sam/ipa_sam.c
+index 9fb4db4c5..ea85a7f43 100644
+--- a/daemons/ipa-sam/ipa_sam.c
++++ b/daemons/ipa-sam/ipa_sam.c
+@@ -2507,7 +2507,8 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
+ 	rc = ldap_str2dn(strdn, &dn, LDAP_DN_FORMAT_LDAPV3);
+ 	if (rc) {
+ 		free(strdn);
+-		return false;
++		res = false;
++		goto done;
+ 	}
+ 
+ 	for (count = 0; dn[count] != NULL; count++);
+@@ -2519,8 +2520,8 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
+ 			  strdn, ipasam_state->trust_dn));
+ 		ldap_dnfree(dn);
+ 		free(strdn);
+-		TALLOC_FREE(td);
+-		return false;
++		res = false;
++		goto done;
+ 
+ 	}
+ 
+@@ -2543,7 +2544,8 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
+ 					       dummy, &sid);
+ 		TALLOC_FREE(dummy);
+ 		if (err != IDMAP_SUCCESS) {
+-			return false;
++			res = false;
++			goto done;
+ 		}
+ 		sid_copy(&td->security_identifier, sid);
+ 		talloc_free(sid);
+@@ -2583,16 +2585,14 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
+ 					 LDAP_ATTRIBUTE_TRUST_DIRECTION,
+ 					 &td->trust_direction);
+ 	if (!res) {
+-		TALLOC_FREE(td);
+-		return false;
++		goto done;
+ 	}
+ 
+ 	res = get_uint32_t_from_ldap_msg(ipasam_state, entry,
+ 					 LDAP_ATTRIBUTE_TRUST_ATTRIBUTES,
+ 					 &td->trust_attributes);
+ 	if (!res) {
+-		TALLOC_FREE(td);
+-		return false;
++		goto done;
+ 	}
+ 	if (td->trust_attributes == 0 && (td->domain_name != dns_domain)) {
+                 /* attribute wasn't present and this is not a subdomain within
+@@ -2604,8 +2604,7 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
+ 					 LDAP_ATTRIBUTE_TRUST_TYPE,
+ 					 &td->trust_type);
+ 	if (!res) {
+-		TALLOC_FREE(td);
+-		return false;
++		goto done;
+ 	}
+ 	if (td->trust_type == 0) {
+ 		/* attribute wasn't present, set default value */
+@@ -2614,28 +2613,24 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
+ 
+ 	td->trust_posix_offset = talloc_zero(td, uint32_t);
+ 	if (td->trust_posix_offset == NULL) {
+-		TALLOC_FREE(td);
+-		return false;
++		goto done;
+ 	}
+ 	res = get_uint32_t_from_ldap_msg(ipasam_state, entry,
+ 					 LDAP_ATTRIBUTE_TRUST_POSIX_OFFSET,
+ 					 td->trust_posix_offset);
+ 	if (!res) {
+-		TALLOC_FREE(td);
+-		return false;
++		goto done;
+ 	}
+ 
+ 	td->supported_enc_type = talloc_zero(td, uint32_t);
+ 	if (td->supported_enc_type == NULL) {
+-		TALLOC_FREE(td);
+-		return false;
++		goto done;
+ 	}
+ 	res = get_uint32_t_from_ldap_msg(ipasam_state, entry,
+ 					 LDAP_ATTRIBUTE_SUPPORTED_ENC_TYPE,
+ 					 td->supported_enc_type);
+ 	if (!res) {
+-		TALLOC_FREE(td);
+-		return false;
++		goto done;
+ 	}
+ 	if (*td->supported_enc_type == 0) {
+ 		*td->supported_enc_type = ipasam_state->supported_enctypes;
+@@ -2647,14 +2642,15 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
+ 		DEBUG(9, ("Failed to set forest trust info.\n"));
+ 	} else {
+ 		res = repack_pdb_forest_trust_info(td);
+-		if (!res) {
+-			return false;
+-		}
+ 	}
+ 
+-	*_td = td;
+-
+-	return true;
++done:
++	if (res) {
++		*_td = td;
++	} else {
++		TALLOC_FREE(td);
++	}
++	return res;
+ }
+ 
+ static NTSTATUS ipasam_get_trusted_domain(struct pdb_methods *methods,
+-- 
+2.51.0
+
+
+From cb36c3d9969ce0c0beacb43c7d4ea29da652c499 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Thu, 11 Sep 2025 13:57:46 +0300
+Subject: [PATCH 37/47] ipasam: address signedness warnings
+
+Signed-off-by: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Julien Rische <jrische@redhat.com>
+---
+ daemons/ipa-sam/ipa_sam.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/daemons/ipa-sam/ipa_sam.c b/daemons/ipa-sam/ipa_sam.c
+index ea85a7f43..55a3a03a5 100644
+--- a/daemons/ipa-sam/ipa_sam.c
++++ b/daemons/ipa-sam/ipa_sam.c
+@@ -236,15 +236,13 @@ static void idmap_talloc_free(void *ptr, void *pvt)
+ 
+ static void sid_copy(struct dom_sid *dst, const struct dom_sid *src)
+ {
+-	size_t c;
+-
+ 	memset(dst, 0, sizeof(*dst));
+ 
+ 	dst->sid_rev_num = src->sid_rev_num;
+ 	dst->num_auths = src->num_auths;
+ 	memcpy(&dst->id_auth[0], &src->id_auth[0], sizeof(src->id_auth));
+ 
+-	for (c = 0; c < src->num_auths; c++) {
++	for (int8_t c = 0; c < src->num_auths; c++) {
+ 		dst->sub_auths[c] = src->sub_auths[c];
+ 	}
+ }
+@@ -3249,7 +3247,6 @@ static NTSTATUS ipasam_enum_trusteddoms(struct pdb_methods *methods,
+ {
+ 	NTSTATUS status;
+ 	struct pdb_trusted_domain **td;
+-	int i;
+ 
+ 	status = ipasam_enum_trusted_domains(methods, mem_ctx,
+ 					     num_domains, &td);
+@@ -3267,7 +3264,7 @@ static NTSTATUS ipasam_enum_trusteddoms(struct pdb_methods *methods,
+ 		goto fail;
+ 	}
+ 
+-	for (i = 0; i < *num_domains; i++) {
++	for (uint32_t i = 0; i < *num_domains; i++) {
+ 		struct trustdom_info *dom_info;
+ 
+ 		dom_info = talloc(*domains, struct trustdom_info);
+-- 
+2.51.0
+
+
+From fc40c7cdcfa3e59d5122248f3ed9faa135de22a6 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Thu, 11 Sep 2025 13:58:03 +0300
+Subject: [PATCH 38/47] ipasam: define prototypes
+
+Signed-off-by: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Julien Rische <jrische@redhat.com>
+---
+ daemons/ipa-sam/ipa_sam.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/daemons/ipa-sam/ipa_sam.c b/daemons/ipa-sam/ipa_sam.c
+index 55a3a03a5..839a621ef 100644
+--- a/daemons/ipa-sam/ipa_sam.c
++++ b/daemons/ipa-sam/ipa_sam.c
+@@ -5380,12 +5380,14 @@ static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
+ 	return NT_STATUS_OK;
+ }
+ 
++NTSTATUS samba_module_init(void);
+ NTSTATUS samba_module_init(void)
+ {
+ 	return smb_register_passdb(PASSDB_INTERFACE_VERSION, "ipasam",
+ 				   pdb_init_ipasam);
+ }
+ 
++NTSTATUS samba_init_module(void);
+ NTSTATUS samba_init_module(void)
+ {
+ 	return smb_register_passdb(PASSDB_INTERFACE_VERSION, "ipasam",
+-- 
+2.51.0
+
+
+From 94493640e10547cd4aff82b017391916149822e5 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Wed, 17 Sep 2025 10:13:44 +0200
+Subject: [PATCH 39/47] ipatests: update the Let's Encrypt cert chain
+
+The test TestIPACommand::test_cacert_manage is using
+Let's Encrypt chain to check the ipa-cacert-manage install
+command.
+The chain isrgrootx1 > r3 must be replaced with
+isrgrootx1 > r12 because r3 expired Sep 15.
+
+Fixes: https://pagure.io/freeipa/issue/9857
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipatests/test_integration/test_commands.py | 63 +++++++++++-----------
+ 1 file changed, 31 insertions(+), 32 deletions(-)
+
+diff --git a/ipatests/test_integration/test_commands.py b/ipatests/test_integration/test_commands.py
+index ad97affe6..fcf347ee0 100644
+--- a/ipatests/test_integration/test_commands.py
++++ b/ipatests/test_integration/test_commands.py
+@@ -88,41 +88,40 @@ isrgrootx1 = (
+ )
+ isrgrootx1_nick = 'CN=ISRG Root X1,O=Internet Security Research Group,C=US'
+ 
+-# This sub-CA expires on Sep 15, 2025 and will need to be replaced
++# This sub-CA expires on March 12, 2027 and will need to be replaced
+ # after this date. Otherwise TestIPACommand::test_cacert_manage fails.
+-letsencryptauthorityr3 = (
++letsencryptauthorityr12 = (
+     b'-----BEGIN CERTIFICATE-----\n'
+-    b'MIIFFjCCAv6gAwIBAgIRAJErCErPDBinU/bWLiWnX1owDQYJKoZIhvcNAQELBQAw\n'
++    b'MIIFBjCCAu6gAwIBAgIRAMISMktwqbSRcdxA9+KFJjwwDQYJKoZIhvcNAQELBQAw\n'
+     b'TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n'
+-    b'cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMjAwOTA0MDAwMDAw\n'
+-    b'WhcNMjUwOTE1MTYwMDAwWjAyMQswCQYDVQQGEwJVUzEWMBQGA1UEChMNTGV0J3Mg\n'
+-    b'RW5jcnlwdDELMAkGA1UEAxMCUjMwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK\n'
+-    b'AoIBAQC7AhUozPaglNMPEuyNVZLD+ILxmaZ6QoinXSaqtSu5xUyxr45r+XXIo9cP\n'
+-    b'R5QUVTVXjJ6oojkZ9YI8QqlObvU7wy7bjcCwXPNZOOftz2nwWgsbvsCUJCWH+jdx\n'
+-    b'sxPnHKzhm+/b5DtFUkWWqcFTzjTIUu61ru2P3mBw4qVUq7ZtDpelQDRrK9O8Zutm\n'
+-    b'NHz6a4uPVymZ+DAXXbpyb/uBxa3Shlg9F8fnCbvxK/eG3MHacV3URuPMrSXBiLxg\n'
+-    b'Z3Vms/EY96Jc5lP/Ooi2R6X/ExjqmAl3P51T+c8B5fWmcBcUr2Ok/5mzk53cU6cG\n'
+-    b'/kiFHaFpriV1uxPMUgP17VGhi9sVAgMBAAGjggEIMIIBBDAOBgNVHQ8BAf8EBAMC\n'
+-    b'AYYwHQYDVR0lBBYwFAYIKwYBBQUHAwIGCCsGAQUFBwMBMBIGA1UdEwEB/wQIMAYB\n'
+-    b'Af8CAQAwHQYDVR0OBBYEFBQusxe3WFbLrlAJQOYfr52LFMLGMB8GA1UdIwQYMBaA\n'
+-    b'FHm0WeZ7tuXkAXOACIjIGlj26ZtuMDIGCCsGAQUFBwEBBCYwJDAiBggrBgEFBQcw\n'
+-    b'AoYWaHR0cDovL3gxLmkubGVuY3Iub3JnLzAnBgNVHR8EIDAeMBygGqAYhhZodHRw\n'
+-    b'Oi8veDEuYy5sZW5jci5vcmcvMCIGA1UdIAQbMBkwCAYGZ4EMAQIBMA0GCysGAQQB\n'
+-    b'gt8TAQEBMA0GCSqGSIb3DQEBCwUAA4ICAQCFyk5HPqP3hUSFvNVneLKYY611TR6W\n'
+-    b'PTNlclQtgaDqw+34IL9fzLdwALduO/ZelN7kIJ+m74uyA+eitRY8kc607TkC53wl\n'
+-    b'ikfmZW4/RvTZ8M6UK+5UzhK8jCdLuMGYL6KvzXGRSgi3yLgjewQtCPkIVz6D2QQz\n'
+-    b'CkcheAmCJ8MqyJu5zlzyZMjAvnnAT45tRAxekrsu94sQ4egdRCnbWSDtY7kh+BIm\n'
+-    b'lJNXoB1lBMEKIq4QDUOXoRgffuDghje1WrG9ML+Hbisq/yFOGwXD9RiX8F6sw6W4\n'
+-    b'avAuvDszue5L3sz85K+EC4Y/wFVDNvZo4TYXao6Z0f+lQKc0t8DQYzk1OXVu8rp2\n'
+-    b'yJMC6alLbBfODALZvYH7n7do1AZls4I9d1P4jnkDrQoxB3UqQ9hVl3LEKQ73xF1O\n'
+-    b'yK5GhDDX8oVfGKF5u+decIsH4YaTw7mP3GFxJSqv3+0lUFJoi5Lc5da149p90Ids\n'
+-    b'hCExroL1+7mryIkXPeFM5TgO9r0rvZaBFOvV2z0gp35Z0+L4WPlbuEjN/lxPFin+\n'
+-    b'HlUjr8gRsI3qfJOQFy/9rKIJR0Y/8Omwt/8oTWgy1mdeHmmjk7j1nYsvC9JSQ6Zv\n'
+-    b'MldlTTKB3zhThV1+XWYp6rjd5JW1zbVWEkLNxE7GJThEUG3szgBVGP7pSWTUTsqX\n'
+-    b'nLRbwHOoq7hHwg==\n'
++    b'cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMjQwMzEzMDAwMDAw\n'
++    b'WhcNMjcwMzEyMjM1OTU5WjAzMQswCQYDVQQGEwJVUzEWMBQGA1UEChMNTGV0J3Mg\n'
++    b'RW5jcnlwdDEMMAoGA1UEAxMDUjEyMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB\n'
++    b'CgKCAQEA2pgodK2+lP474B7i5Ut1qywSf+2nAzJ+Npfs6DGPpRONC5kuHs0BUT1M\n'
++    b'5ShuCVUxqqUiXXL0LQfCTUA83wEjuXg39RplMjTmhnGdBO+ECFu9AhqZ66YBAJpz\n'
++    b'kG2Pogeg0JfT2kVhgTU9FPnEwF9q3AuWGrCf4yrqvSrWmMebcas7dA8827JgvlpL\n'
++    b'Thjp2ypzXIlhZZ7+7Tymy05v5J75AEaz/xlNKmOzjmbGGIVwx1Blbzt05UiDDwhY\n'
++    b'XS0jnV6j/ujbAKHS9OMZTfLuevYnnuXNnC2i8n+cF63vEzc50bTILEHWhsDp7CH4\n'
++    b'WRt/uTp8n1wBnWIEwii9Cq08yhDsGwIDAQABo4H4MIH1MA4GA1UdDwEB/wQEAwIB\n'
++    b'hjAdBgNVHSUEFjAUBggrBgEFBQcDAgYIKwYBBQUHAwEwEgYDVR0TAQH/BAgwBgEB\n'
++    b'/wIBADAdBgNVHQ4EFgQUALUp8i2ObzHom0yteD763OkM0dIwHwYDVR0jBBgwFoAU\n'
++    b'ebRZ5nu25eQBc4AIiMgaWPbpm24wMgYIKwYBBQUHAQEEJjAkMCIGCCsGAQUFBzAC\n'
++    b'hhZodHRwOi8veDEuaS5sZW5jci5vcmcvMBMGA1UdIAQMMAowCAYGZ4EMAQIBMCcG\n'
++    b'A1UdHwQgMB4wHKAaoBiGFmh0dHA6Ly94MS5jLmxlbmNyLm9yZy8wDQYJKoZIhvcN\n'
++    b'AQELBQADggIBAI910AnPanZIZTKS3rVEyIV29BWEjAK/duuz8eL5boSoVpHhkkv3\n'
++    b'4eoAeEiPdZLj5EZ7G2ArIK+gzhTlRQ1q4FKGpPPaFBSpqV/xbUb5UlAXQOnkHn3m\n'
++    b'FVj+qYv87/WeY+Bm4sN3Ox8BhyaU7UAQ3LeZ7N1X01xxQe4wIAAE3JVLUCiHmZL+\n'
++    b'qoCUtgYIFPgcg350QMUIWgxPXNGEncT921ne7nluI02V8pLUmClqXOsCwULw+PVO\n'
++    b'ZCB7qOMxxMBoCUeL2Ll4oMpOSr5pJCpLN3tRA2s6P1KLs9TSrVhOk+7LX28NMUlI\n'
++    b'usQ/nxLJID0RhAeFtPjyOCOscQBA53+NRjSCak7P4A5jX7ppmkcJECL+S0i3kXVU\n'
++    b'y5Me5BbrU8973jZNv/ax6+ZK6TM8jWmimL6of6OrX7ZU6E2WqazzsFrLG3o2kySb\n'
++    b'zlhSgJ81Cl4tv3SbYiYXnJExKQvzf83DYotox3f0fwv7xln1A2ZLplCb0O+l/AK0\n'
++    b'YE0DS2FPxSAHi0iwMfW2nNHJrXcY3LLHD77gRgje4Eveubi2xxa+Nmk/hmhLdIET\n'
++    b'iVDFanoCrMVIpQ59XWHkzdFmoHXHBV7oibVjGSO7ULSQ7MJ1Nz51phuDJSgAIU7A\n'
++    b'0zrLnOrAj/dfrlEWRhCvAgbuwLZX1A2sjNjXoPOHbsPiy+lO1KF8/XY7\n'
+     b'-----END CERTIFICATE-----\n'
+ )
+-le_r3_nick = "CN=R3,O=Let's Encrypt,C=US"
++le_r12_nick = "CN=R12,O=Let's Encrypt,C=US"
+ 
+ # Certificates for reproducing duplicate ipaCertSubject values.
+ # The trick to creating the second intermediate is for the validity
+@@ -1230,7 +1229,7 @@ class TestIPACommand(IntegrationTest):
+                result.stderr_text
+ 
+         # Install 3rd party CA's, Let's Encrypt in this case
+-        for cert in (isrgrootx1, letsencryptauthorityr3):
++        for cert in (isrgrootx1, letsencryptauthorityr12):
+             certfile = os.path.join(self.master.config.test_dir, 'cert.pem')
+             self.master.put_file_contents(certfile, cert)
+             result = self.master.run_command(
+@@ -1257,7 +1256,7 @@ class TestIPACommand(IntegrationTest):
+ 
+         # deletion of a subca
+         result = self.master.run_command(
+-            ['ipa-cacert-manage', 'delete', le_r3_nick],
++            ['ipa-cacert-manage', 'delete', le_r12_nick],
+             raiseonerr=False
+         )
+         assert result.returncode == 0
+-- 
+2.51.0
+
+
+From 0a5509665485baa5190f2e3c6fdd765c966a4405 Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Mon, 15 Sep 2025 09:41:31 +0300
+Subject: [PATCH 40/47] GetEntryFromLDIF: handle DNs case-insensitive
+
+LDAP expects case-insensitive DNs, so modify LDIF parser to
+compare DNs as case-insensitive strings and use case-preserving but
+case-insensitive dictionary.
+
+Fixes: https://pagure.io/freeipa/issue/9854
+
+Signed-off-by: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+---
+ ipaserver/install/upgradeinstance.py | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/ipaserver/install/upgradeinstance.py b/ipaserver/install/upgradeinstance.py
+index b84f50b05..ecd0a08ea 100644
+--- a/ipaserver/install/upgradeinstance.py
++++ b/ipaserver/install/upgradeinstance.py
+@@ -29,7 +29,7 @@ import traceback
+ from ipalib import api
+ from ipaplatform.paths import paths
+ from ipaplatform import services
+-from ipapython import ipaldap
++from ipapython import ipaldap, ipautil
+ 
+ from ipaserver.install import installutils
+ from ipaserver.install import schemaupdate
+@@ -57,8 +57,8 @@ class GetEntryFromLDIF(ldif.LDIFParser):
+          returned if list is empty.
+         """
+         ldif.LDIFParser.__init__(self, input_file)
+-        self.entries_dn = entries_dn
+-        self.results = {}
++        self.entries_dn = [e.lower() for e in entries_dn]
++        self.results = ipautil.CIDict()
+ 
+     def get_results(self):
+         """
+@@ -67,7 +67,7 @@ class GetEntryFromLDIF(ldif.LDIFParser):
+         return self.results
+ 
+     def handle(self, dn, entry):
+-        if self.entries_dn and dn not in self.entries_dn:
++        if self.entries_dn and dn.lower() not in self.entries_dn:
+             return
+ 
+         self.results[dn] = entry
+-- 
+2.51.0
+
+
+From aae73dfc3b549f1dc21a8bd3a2bbd7d05d8edce1 Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Mon, 15 Sep 2025 16:59:52 +0200
+Subject: [PATCH 41/47] ipatests: exclude TomcatFileCheck when RSN are enabled
+
+Because of PKI issue #4906, the permissions of
+/var/lib/pki/pki-tomcat/conf/ca/CS.cfg
+are too permissive when RSN is enabled and the check TomcatFileCheck
+from ipahealthcheck.ipa.files fails.
+
+Exclude this check when RSN are enabled.
+
+Related: https://github.com/dogtagpki/pki/issues/4906
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipatests/test_integration/test_ipahealthcheck.py | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/ipatests/test_integration/test_ipahealthcheck.py b/ipatests/test_integration/test_ipahealthcheck.py
+index 3dcc22411..6d04d3b10 100644
+--- a/ipatests/test_integration/test_ipahealthcheck.py
++++ b/ipatests/test_integration/test_ipahealthcheck.py
+@@ -2521,6 +2521,12 @@ class TestIpaHealthCLI(IntegrationTest):
+         )
+         tasks.install_packages(cls.master, HEALTHCHECK_PKG)
+         set_excludes(cls.master, "key", "DSCLE0004")
++        # Because of issue PKI#4906, skip the check ipahealthcheck.ipa.files
++        # TomcatFileCheck if random serial numbers are enabled
++        cs_cfg = cls.master.get_file_contents(paths.CA_CS_CFG_PATH,
++                                              encoding='utf-8')
++        if "dbs.cert.id.generator=random" in cs_cfg:
++            set_excludes(cls.master, "check", "TomcatFileCheck")
+ 
+     def test_indent(self):
+         """
+-- 
+2.51.0
+
+
+From a23e08286de966aa35071378f9ce27e4fd53993a Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Mon, 15 Sep 2025 15:09:28 +0200
+Subject: [PATCH 42/47] ipatests: add xfail for TestKRAinstallAfterCertRenew
+
+With PKI 11.6, pkispawn checks that the certificate provided in
+pki_admin_cert_file = /root/.dogtag/pki-tomcat/ca_admin.cert is still
+valid.
+In this scenario the date is moved past the validy date and IPA
+does not refresh the certificate, hence the test fails.
+Mark as known issue (ticket https://pagure.io/freeipa/issue/9763)
+
+Related: https://pagure.io/freeipa/issue/9763
+Signed-off-by: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipatests/test_integration/test_installation.py | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/ipatests/test_integration/test_installation.py b/ipatests/test_integration/test_installation.py
+index e8ca76300..34ccc317f 100644
+--- a/ipatests/test_integration/test_installation.py
++++ b/ipatests/test_integration/test_installation.py
+@@ -36,6 +36,7 @@ from ipatests.test_integration.base import IntegrationTest
+ from ipatests.test_integration.test_caless import CALessBase, ipa_certs_cleanup
+ from ipatests.test_integration.test_cert import get_certmonger_fs_id
+ from ipatests.pytest_ipa.integration import skip_if_fips
++from ipatests.util import xfail_context
+ from ipaplatform import services
+ 
+ 
+@@ -1627,8 +1628,18 @@ class TestKRAinstallAfterCertRenew(IntegrationTest):
+ 
+         passwd = "{passwd}\n{passwd}\n{passwd}".format(passwd=admin_pass)
+         self.master.run_command(['kinit', 'admin'], stdin_text=passwd)
+-        cmd = self.master.run_command(['ipa-kra-install', '-p', dm_pass, '-U'])
+-        self.master.run_command(['systemctl', 'start', 'chronyd'])
++        try:
++            # With PKI 11.6 the validity of the cert in
++            # /root/.dogtag/pki-tomcat/ca_admin.cert is checked
++            # and KRA install fails. Known IPA issue
++            pki_version = tasks.get_pki_version(self.master)
++            with xfail_context(pki_version >= tasks.parse_version('11.6.0'),
++                               'https://pagure.io/freeipa/issue/9763'):
++                cmd = self.master.run_command([
++                    'ipa-kra-install', '-p', dm_pass, '-U'
++                ])
++        finally:
++            self.master.run_command(['systemctl', 'start', 'chronyd'])
+ 
+ 
+ class TestKRAinstallOnReplicaWithCAHost(IntegrationTest):
+-- 
+2.51.0
+
+
+From ec92f726c3e14db135e11268983e9e842fcaf485 Mon Sep 17 00:00:00 2001
+From: Rob Crittenden <rcritten@redhat.com>
+Date: Thu, 14 Aug 2025 13:51:45 -0400
+Subject: [PATCH 43/47] Test that certificates beyond 2038 can be parsed
+
+The old 32-bit time_t will overflow in 2038. Test that
+the IPA certificate loader will be able to parse
+certificates far into the future.
+
+Related: https://pagure.io/freeipa/issue/2496
+
+Signed-off-by: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+---
+ ipatests/test_ipalib/test_x509.py | 35 +++++++++++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+diff --git a/ipatests/test_ipalib/test_x509.py b/ipatests/test_ipalib/test_x509.py
+index 74761296e..59273029a 100644
+--- a/ipatests/test_ipalib/test_x509.py
++++ b/ipatests/test_ipalib/test_x509.py
+@@ -185,6 +185,32 @@ bswNlxWfohaW0FzTRfTMbIrwoUCWil/Uw2kBYnld15gwzuLDNQ==
+ -----END CERTIFICATE-----
+ '''
+ 
++# Generated by moving the date forward 20 years and running
++# certutil -S -d . -x -n cacert -s 'CN=Authority,O=EXAMPLE', \
++# -t CT,CT,CT -m 1 -v 1200 -z /etc/group --keyUsage certSigning -2
++#
++# The answers are Y, 0, Y for CA, 0 pathlen, Y critical
++future_crt = b'''\
++-----BEGIN CERTIFICATE-----
++MIIC7DCCAdSgAwIBAgIBATANBgkqhkiG9w0BAQsFADAmMRAwDgYDVQQKEwdFWEFN
++UExFMRIwEAYDVQQDEwlBdXRob3JpdHkwIBcNNDUwODEzMjAzODM1WhgPMjE0NTA4
++MTMyMDM4MzVaMCYxEDAOBgNVBAoTB0VYQU1QTEUxEjAQBgNVBAMTCUF1dGhvcml0
++eTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBANEoViGF+AZPbyFuPVcv
++IbORShWy0iIPCTw+mdxTp+w3g3wzCQNQP1d0y8kI4xHqm3PTmVf0LdGwAhgKpeTu
++CdR97scvjGDNCa8pluQ1kmal2rkSeKYkVEw4BwO0RfBPYj3WIkamLIHcFapD97C3
++M2UptAUj6wCpRzRmFG6H2vgujcZZ/J4P5C97sxPa9H8BRYjEPnIXRsmKOof9EM/Q
++u/haBJnq27ajSLO+Sz0J0dKG1+aZj0tJw4dWsjdyHQ1S5JBI6xdvOFGmws6XRkgp
++9Mr7MS4j9xuNk5tMucP2rsi++wju7hrhaWfqfcfQFf+gSCT3l0FnoT5n0tPEjEiP
++1uMCAwEAAaMjMCEwEgYDVR0TAQH/BAgwBgEB/wIBADALBgNVHQ8EBAMCAgQwDQYJ
++KoZIhvcNAQELBQADggEBAC/UO/COTCIdA+A7m6YGCcPcdtgvMOQVfKtq5UYAaG/i
++zE09mGQqMgiGJh7PWTKT7R6Q9caFFHBnTy2mUkvV0O7xHtKSVyMlkmQ9+ga0jq+D
++5uKAKZLrefC+pbjIIgunHTOaSFfggT9Z+i3IP2M1JyA0zMrcRQIM2OyDdn8F4/k5
++VegTAUP/W/WgMC6WrvLhKCQqQORPt6zbvuK0GvQXSBTRgG+ctX4N1LaLhv8lF6kL
++dyVGK1EGi9Geu5HHfrZTHx6qLgXKD1KbfZVdMtX90vTO/ISXOhnmRzC7EqLi9YEJ
++noLqHv5DUjSOIO3gMKTBImvUNg88hPp7zE/3//uSvXc=
++-----END CERTIFICATE-----
++'''
++
+ 
+ class test_x509:
+     """
+@@ -332,6 +358,15 @@ class test_x509:
+         with pytest.raises(ValueError):
+             x509.load_pem_x509_certificate(v1_cert)
+ 
++    def test_future_certificate_dates(self):
++        """
++        Issue a certificate that is valid after 2038 that will be valid
++        after 2016 and validate that it is readable by ipalib.x509.py.
++        """
++        cert = x509.load_pem_x509_certificate(future_crt)
++        assert cert.not_valid_before.year > 2038
++        assert cert.not_valid_after.year > 2106
++
+ 
+ class test_ExternalCAProfile:
+     def test_MSCSTemplateV1_good(self):
+-- 
+2.51.0
+
+
+From be7255ea6025df423348ad58abcea6c23df1d634 Mon Sep 17 00:00:00 2001
+From: Rob Crittenden <rcritten@redhat.com>
+Date: Thu, 14 Aug 2025 16:20:48 -0400
+Subject: [PATCH 44/47] Test that password expiration date past 2038 works
+
+There was a time we capped the expiration date at 2038
+because otherwise time would overflow. That was fixed.
+Add a test to ensure it stays that way.
+
+Fixes: https://pagure.io/freeipa/issue/2496
+
+Signed-off-by: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+---
+ ipatests/test_integration/test_commands.py | 53 ++++++++++++++++++++++
+ 1 file changed, 53 insertions(+)
+
+diff --git a/ipatests/test_integration/test_commands.py b/ipatests/test_integration/test_commands.py
+index fcf347ee0..6aaf4f299 100644
+--- a/ipatests/test_integration/test_commands.py
++++ b/ipatests/test_integration/test_commands.py
+@@ -200,6 +200,28 @@ duplicatesubject = (
+ duplicate_serial = "4097"
+ 
+ 
++@pytest.fixture()
++def expire_password():
++    """
++    Fixture to expire a user's password far into the future past
++    2038, then revert time back.
++    """
++    hosts = dict()
++
++    def _expire_password(host):
++        hosts['host'] = host
++        tasks.move_date(host, 'stop', '+20Years')
++        host.run_command(
++            ['ipactl', 'restart', '--ignore-service-failures']
++        )
++
++    yield _expire_password
++
++    host = hosts.pop('host')
++    tasks.uninstall_master(host)
++    tasks.move_date(host, 'start', '-20Years')
++
++
+ class TestIPACommand(IntegrationTest):
+     """
+     A lot of commands can be executed against a single IPA installation
+@@ -1888,6 +1910,37 @@ class TestIPACommand(IntegrationTest):
+         assert f"{interm_nick}  {intermediate_serial}" not in certs
+         assert f"{interm_nick}  {duplicate_serial}" in certs
+ 
++    def test_expiration_date_post_2038(self, expire_password):
++        """Test that expiration dates after 2038 function without
++           overflow.
++        """
++        testuser = 'testuser2038'
++        password = 'Secret@123'
++
++        tasks.kinit_admin(self.master)
++        tasks.user_add(self.master, testuser, password=password)
++        self.master.run_command([
++            'ipa', 'user-mod', testuser, '--password-expiration',
++            '20381112175322Z',
++        ])
++
++        tasks.kdestroy_all(self.master)
++        expire_password(self.master)
++
++        new_password = "%s\n%s\n%s\n" % (password,
++                                         password,
++                                         password)
++
++        # kinit_user will pass in the "password" value as stdin. We
++        # should see a prompt about an expired password and set a new
++        # one (to the same thing). If this kinit succeeds then the
++        # expiration date was honored and a new one can be set. Time will
++        # be restored on return from this function.
++        tasks.kinit_user(self.master, testuser, new_password)
++
++        # This must be the last test in this class because it moves
++        # time and uninstalls the server when it is finished.
++
+ 
+ class TestIPACommandWithoutReplica(IntegrationTest):
+     """
+-- 
+2.51.0
+
+
+From 1db66d23c79f9d8f53ad4ad6febd25e54f9f6da0 Mon Sep 17 00:00:00 2001
+From: Rob Crittenden <rcritten@redhat.com>
+Date: Tue, 19 Nov 2024 16:36:32 -0500
+Subject: [PATCH 45/47] Catch decoding errors in CertificateSigningRequest
+ parameters
+
+A try/except is needed around base64.b64decode in case an invalid
+CSR is passed in to a cert function.
+
+Related: https://pagure.io/freeipa/issue/9738
+
+Signed-off-by: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+Reviewed-By: Rob Crittenden <rcritten@redhat.com>
+---
+ ipalib/parameters.py                    |  9 +++++++--
+ ipatests/test_ipalib/test_parameters.py | 25 +++++++++++++++++--------
+ 2 files changed, 24 insertions(+), 10 deletions(-)
+
+diff --git a/ipalib/parameters.py b/ipalib/parameters.py
+index d0c8a84a9..355ba3eec 100644
+--- a/ipalib/parameters.py
++++ b/ipalib/parameters.py
+@@ -102,6 +102,7 @@ a more detailed description for clarity.
+ import re
+ import decimal
+ import base64
++import binascii
+ import datetime
+ import inspect
+ import typing
+@@ -1523,7 +1524,11 @@ class CertificateSigningRequest(Param):
+             return value
+ 
+         value = strip_csr_header(value)
+-        return base64.b64decode(value)
++        try:
++            return base64.b64decode(value)
++        except binascii.Error as e:
++            raise CertificateOperationError(
++                error=_('not a valid CSR: %s') % e)
+ 
+     def _convert_scalar(self, value, index=None):
+         """
+@@ -1537,7 +1542,7 @@ class CertificateSigningRequest(Param):
+             try:
+                 value = value.encode('ascii')
+             except UnicodeDecodeError:
+-                raise CertificateOperationError('not a valid CSR')
++                raise CertificateOperationError(error=_('not a valid CSR'))
+ 
+         if isinstance(value, bytes):
+             # try to extract DER from whatever we got
+diff --git a/ipatests/test_ipalib/test_parameters.py b/ipatests/test_ipalib/test_parameters.py
+index 9feb613b5..60abeb95e 100644
+--- a/ipatests/test_ipalib/test_parameters.py
++++ b/ipatests/test_ipalib/test_parameters.py
+@@ -1720,11 +1720,16 @@ class test_CertificateSigningRequest(ClassChecker):
+         b'\xed\r\x96\xfb\x1b\x8dN\xac\x89gz9\x98\xd9\xd6\x9e\x7fW}\xf4\x97;'
+         b'\xad\xfe\xad\xc276\x80qmE\xc7|\x0b\xb1^R],'
+     )
+-    malformed_csr = (
++    malformed_csr = (  # value not a CSR
+         b'-----BEGIN CERTIFICATE REQUEST-----\n'
+         b'VGhpcyBpcyBhbiBpbnZhbGlkIENTUg==\n'
+         b'-----END CERTIFICATE REQUEST-----\n'
+     )
++    malformed_csr_2 = (  # invalid input
++        b'-----BEGIN CERTIFICATE REQUEST-----\n'
++        b'123\n'
++        b'-----END CERTIFICATE REQUEST-----\n'
++    )
+ 
+     def test_init(self):
+         # create the parameter
+@@ -1752,14 +1757,18 @@ class test_CertificateSigningRequest(ClassChecker):
+                     self.sample_csr)
+ 
+         # test that we fail the same with malformed CSR as bytes or str
+-        for prep_input in (
+-            lambda x: x,
+-            lambda x: x.decode('utf-8'),
++        for input in (
++            self.malformed_csr,
++            self.malformed_csr_2
+         ):
+-            # test that malformed CSRs won't be accepted
+-            raises(errors.CertificateOperationError,
+-                   o.convert,
+-                   prep_input(self.malformed_csr))
++            for prep_input in (
++                lambda x: x,
++                lambda x: x.decode('utf-8'),
++            ):
++                # test that malformed CSRs won't be accepted
++                raises(errors.CertificateOperationError,
++                       o.convert,
++                       prep_input(input))
+ 
+         # test DER as an input to the convert method
+         csr_object = o.convert(self.sample_der_csr)
+-- 
+2.51.0
+
+
+From 272ed4d9f54cc38eeece4314c76775fd95a7e667 Mon Sep 17 00:00:00 2001
+From: Rob Crittenden <rcritten@redhat.com>
+Date: Tue, 22 Apr 2025 15:39:16 +0000
+Subject: [PATCH 46/47] Don't let lack of subca in PKI prevent LDAP deletion
+
+If a subCA only exists in LDAP then it couldn't be removed.
+
+Allow the process to continue. It will fail in the same way if
+it doesn't exist on both Dogtag and IPA.
+
+Related: https://pagure.io/freeipa/issue/9738
+
+Signed-off-by: Rob Crittenden <rcritten@redhat.com>
+Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+---
+ ipaserver/plugins/ca.py                |  5 ++++-
+ ipaserver/plugins/dogtag.py            |  2 ++
+ ipatests/test_integration/test_cert.py | 27 ++++++++++++++++++++++++++
+ 3 files changed, 33 insertions(+), 1 deletion(-)
+
+diff --git a/ipaserver/plugins/ca.py b/ipaserver/plugins/ca.py
+index 44dd29941..d35275cc6 100644
+--- a/ipaserver/plugins/ca.py
++++ b/ipaserver/plugins/ca.py
+@@ -353,7 +353,10 @@ class ca_del(LDAPDelete):
+                 key=keys[0],
+                 reason=_("IPA CA cannot be deleted"))
+ 
+-        ca_id = self.api.Command.ca_show(keys[0])['result']['ipacaid'][0]
++        try:
++            ca_id = self.api.Command.ca_show(keys[0])['result']['ipacaid'][0]
++        except errors.NotFound:
++            return dn
+         with self.api.Backend.ra_lightweight_ca as ca_api:
+             data = ca_api.read_ca(ca_id)
+             if data['enabled']:
+diff --git a/ipaserver/plugins/dogtag.py b/ipaserver/plugins/dogtag.py
+index 00fe1ad64..03c06eaa4 100644
+--- a/ipaserver/plugins/dogtag.py
++++ b/ipaserver/plugins/dogtag.py
+@@ -667,6 +667,8 @@ class RestClient(Backend):
+         )
+         if status < 200 or status >= 300:
+             explanation = self._parse_dogtag_error(resp_body) or ''
++            if status == 404:
++                raise errors.NotFound(reason=explanation)
+             raise errors.HTTPRequestError(
+                 status=status,
+                 reason=_('Non-2xx response from CA REST API: %(status)d. %(explanation)s')
+diff --git a/ipatests/test_integration/test_cert.py b/ipatests/test_integration/test_cert.py
+index ddc4e089a..3e1e8fd1f 100644
+--- a/ipatests/test_integration/test_cert.py
++++ b/ipatests/test_integration/test_cert.py
+@@ -299,6 +299,33 @@ class TestInstallMasterClient(IntegrationTest):
+         ).stdout_text
+         assert 'issued:' in result
+ 
++    def test_remove_missing_lwca(self):
++        """Test removing an IPA LWCA if the PKI copy is missing."""
++        lwca_regex = r'  Authority ID: (.*)$'
++        lwca = 'lwca'
++        subject = 'CN=LWCA'
++        result = self.master.run_command([
++            'ipa', 'ca-add', lwca, '--subject', subject
++        ])
++        assert 'Created CA "{}"'.format(lwca) in result.stdout_text
++
++        result = self.master.run_command(['ipa', 'ca-show', lwca, '--all'])
++        m = None
++        for line in result.stdout_text.split('\n'):
++            m = re.match(lwca_regex, line)
++            if m:
++                break
++        assert m
++        ca_id = m.groups(0)[0]
++
++        remove_ca_ldif = textwrap.dedent("""
++             dn: cn={ca_id},ou=authorities,ou=ca,o=ipaca
++             changetype: delete
++             """.format(ca_id=ca_id))
++        tasks.ldapmodify_dm(self.master, remove_ca_ldif)
++
++        self.master.run_command(['ipa', 'ca-del', lwca])
++
+ 
+ class TestCertmongerRekey(IntegrationTest):
+ 
+-- 
+2.51.0
+
+
+From c1c0c0d8784fdec78dcd590b5cdfab6f3a2b4b0d Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Thu, 18 Sep 2025 18:20:11 +0300
+Subject: [PATCH 47/47] ipasam: remove definitions which included from
+ ndr_drsblobs.h
+
+Do not need to have duplicates as we include them. They used to be not
+exported by Samba but not anymore.
+
+Signed-off-by: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Florence Blanc-Renaud <flo@redhat.com>
+---
+ daemons/ipa-sam/ipa_sam.c | 47 ---------------------------------------
+ 1 file changed, 47 deletions(-)
+
+diff --git a/daemons/ipa-sam/ipa_sam.c b/daemons/ipa-sam/ipa_sam.c
+index 839a621ef..c43ffddbb 100644
+--- a/daemons/ipa-sam/ipa_sam.c
++++ b/daemons/ipa-sam/ipa_sam.c
+@@ -43,53 +43,6 @@ char *smb_xstrdup(const char *s);
+ #include "ipa_pwd.h"
+ #include "ipa_mspac.h"
+ 
+-/* from drsblobs.h */
+-struct AuthInfoNone {
+-	uint32_t size;/* [value(0)] */
+-};
+-
+-struct AuthInfoNT4Owf {
+-	uint32_t size;/* [value(16)] */
+-	struct samr_Password password;
+-};
+-
+-struct AuthInfoClear {
+-	uint32_t size;
+-	uint8_t *password;
+-};
+-
+-struct AuthInfoVersion {
+-	uint32_t size;/* [value(4)] */
+-	uint32_t version;
+-};
+-
+-union AuthInfo {
+-	struct AuthInfoNone none;/* [case(TRUST_AUTH_TYPE_NONE)] */
+-	struct AuthInfoNT4Owf nt4owf;/* [case(TRUST_AUTH_TYPE_NT4OWF)] */
+-	struct AuthInfoClear clear;/* [case(TRUST_AUTH_TYPE_CLEAR)] */
+-	struct AuthInfoVersion version;/* [case(TRUST_AUTH_TYPE_VERSION)] */
+-}/* [nodiscriminant] */;
+-
+-struct AuthenticationInformation {
+-	NTTIME LastUpdateTime;
+-	enum lsa_TrustAuthType AuthType;
+-	union AuthInfo AuthInfo;/* [switch_is(AuthType)] */
+-	DATA_BLOB _pad;/* [flag(LIBNDR_FLAG_ALIGN4)] */
+-}/* [public] */;
+-
+-struct AuthenticationInformationArray {
+-	uint32_t count;
+-	struct AuthenticationInformation *array;
+-}/* [gensize,nopush,public,nopull] */;
+-
+-struct trustAuthInOutBlob {
+-	uint32_t count;
+-	uint32_t current_offset;/* [value((count>0)?12:0)] */
+-	uint32_t previous_offset;/* [value((count>0)?12+ndr_size_AuthenticationInformationArray(&current,ndr->flags):0)] */
+-	struct AuthenticationInformationArray current;/* [subcontext_size((previous_offset)-(current_offset)),subcontext(0)] */
+-	struct AuthenticationInformationArray previous;/* [subcontext(0),flag(LIBNDR_FLAG_REMAINING)] */
+-}/* [gensize,public,nopush] */;
+-
+ /* from generated idmap.h - hopefully OK */
+ enum id_type {
+ 	ID_TYPE_NOT_SPECIFIED,
+-- 
+2.51.0
+

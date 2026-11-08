@@ -1,0 +1,11 @@
+diff -up texlive-base-20180414/source/texk/web2c/synctexdir/synctex_parser.c.shh texlive-base-20180414/source/texk/web2c/synctexdir/synctex_parser.c
+--- texlive-base-20180414/source/texk/web2c/synctexdir/synctex_parser.c.shh	2019-03-19 11:02:44.303218932 -0400
++++ texlive-base-20180414/source/texk/web2c/synctexdir/synctex_parser.c	2019-03-19 11:02:59.545857443 -0400
+@@ -6023,7 +6023,6 @@ synctex_scanner_p synctex_scanner_new_wi
+     if ((scanner->reader = synctex_reader_init_with_output_file(scanner->reader, output, build_directory))) {
+         return parse? synctex_scanner_parse(scanner):scanner;
+     }
+-    _synctex_error("No file?");
+     return NULL;
+ }
+ 

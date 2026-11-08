@@ -1,0 +1,24 @@
+diff -up texlive-base-20220321/source/texk/web2c/synctexdir/synctex_parser.c.spotfix texlive-base-20220321/source/texk/web2c/synctexdir/synctex_parser.c
+--- texlive-base-20220321/source/texk/web2c/synctexdir/synctex_parser.c.spotfix	2023-01-30 13:53:54.728596407 -0500
++++ texlive-base-20220321/source/texk/web2c/synctexdir/synctex_parser.c	2023-01-30 13:54:03.585695070 -0500
+@@ -95,6 +95,8 @@
+ #       endif
+ #   endif
+ 
++#define __STDC_WANT_LIB_EXT2__ 1
++
+ #include <stdlib.h>
+ #include <stdarg.h>
+ #include <stdio.h>
+diff -up texlive-base-20220321/source/texk/web2c/synctexdir/synctex_parser_utils.c.spotfix texlive-base-20220321/source/texk/web2c/synctexdir/synctex_parser_utils.c
+--- texlive-base-20220321/source/texk/web2c/synctexdir/synctex_parser_utils.c.spotfix	2023-01-30 13:56:35.358385753 -0500
++++ texlive-base-20220321/source/texk/web2c/synctexdir/synctex_parser_utils.c	2023-01-30 13:57:11.206785083 -0500
+@@ -40,6 +40,8 @@
+ 
+ /*  In this file, we find all the functions that may depend on the operating system. */
+ 
++#define __STDC_WANT_LIB_EXT2__ 1
++
+ #include <synctex_parser_utils.h>
+ #include <stdlib.h>
+ #include <string.h>

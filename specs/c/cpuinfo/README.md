@@ -1,0 +1,3 @@
+# cpuinfo
+
+The cpuinfo package

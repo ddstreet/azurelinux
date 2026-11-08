@@ -159,7 +159,7 @@
 Summary: Various compilers (C, C++, Objective-C, ...)
 Name: gcc
 Version: %{gcc_version}
-Release: %{gcc_release}%{?dist}
+Release: %{gcc_release}%{?dist}.1
 # License notes for some of the less obvious ones:
 #   gcc/doc/cppinternals.texi: Linux-man-pages-copyleft-2-para
 #   isl: MIT, BSD-2-Clause
@@ -3811,6 +3811,9 @@ end
 %endif
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 15.3.1-2.1
+- Render component as lockless
+
 * Wed Jul 22 2026 Jakub Jelinek <jakub@redhat.com> 15.3.1-1
 - update from releases/gcc-15 branch
   - GCC 15.3 release

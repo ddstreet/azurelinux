@@ -1,0 +1,11 @@
+diff -Nrup a/src/lib/SoftHSM.cpp b/src/lib/SoftHSM.cpp
+--- a/src/lib/SoftHSM.cpp	2019-09-23 10:45:59.979484657 -0600
++++ b/src/lib/SoftHSM.cpp	2019-09-23 10:46:46.394199562 -0600
+@@ -78,6 +78,7 @@
+ 
+ #include <stdlib.h>
+ #include <algorithm>
++#include <stdexcept>
+ 
+ // Initialise the one-and-only instance
+ 

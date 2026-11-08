@@ -7,7 +7,7 @@
 Name:       scl-utils
 Epoch:      1
 Version:    2.0.3
-Release:    6%{dist}
+Release:    7%{dist}
 Summary:    Utilities for alternative packaging
 
 License:    GPL-2.0-or-later
@@ -86,6 +86,9 @@ make check
 %{_rpmconfigdir}/brp-scl-python-bytecompile
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1:2.0.3-7
+- Render component as lockless
+
 * Tue Aug  5 2025 Remi Collet <remi@remirepo.net> - 1:2.0.3-6
 - fix build with GCC 15 using patch from
   https://github.com/sclorg/scl-utils/pull/57

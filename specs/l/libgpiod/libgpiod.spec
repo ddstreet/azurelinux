@@ -6,7 +6,7 @@
 
 Name:          libgpiod
 Version:       2.2.5
-Release:       1%{?candidate:.%{candidate}}%{?dist}
+Release:       2%{?candidate:.%{candidate}}%{?dist}
 Summary:       C library and tools for interacting with linux GPIO char device
 
 License:       LGPL-2.1-or-later
@@ -199,6 +199,9 @@ find %{buildroot} -name '*.la' -delete
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 2.2.5-2
+- Render component as lockless
+
 * Mon Jun 15 2026 Peter Robinson <pbrobinson@fedoraproject.org> - 2.2.5-1
 - Update to 2.2.5 (rhbz#2488905)
 

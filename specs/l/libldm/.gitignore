@@ -1,0 +1,15 @@
+# generic
+.*.swp
+*~
+
+# mockbuild
+/results_libldm/
+
+# local
+/.build-*.log
+/x86_64/
+/libldm-*.src.rpm
+/libldm-*/
+
+# sources
+/libldm-[0-9]*.tar.gz

@@ -34,7 +34,7 @@
 
 Name:		shim-unsigned-%{efiarch}
 Version:	16.1
-Release: 2%{?dist}
+Release:	3%{?dist}
 Summary:	First-stage UEFI bootloader
 ExclusiveArch:	x86_64
 License:	BSD-2-Clause AND OpenSSL
@@ -193,6 +193,18 @@ cd ..
 %files debugsource -f build-%{efiarch}/debugsource.list
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 16.1-3
+- Render component as lockless
+
+* Mon Aug 24 2026 Lynsey Rydberg <lyrydber@microsoft.com> - 16.1-2
+- Update shim-unsigned packages to 16.1
+- Enforce the grub,5 SBAT generation baseline
+- Remove obsolete %{version}-2 compatibility symlinks
+- Omit unsupported IA32 output
+- Add Azure Linux SBAT provenance
+- Embed the Azure Linux vendor certificate
+- Add NX-compatible EFI variants
+
 * Mon Aug 24 2026 Lynsey Rydberg <lyrydber@microsoft.com> - 16.1-2
 - Update shim-unsigned packages to 16.1
 - Enforce the grub,5 SBAT generation baseline

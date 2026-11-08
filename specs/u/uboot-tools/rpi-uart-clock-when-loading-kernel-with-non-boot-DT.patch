@@ -1,0 +1,161 @@
+From patchwork Tue Apr 15 08:30:14 2025
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+X-Patchwork-Submitter: Bruno Leite <brunosampaioleite@gmail.com>
+X-Patchwork-Id: 2072903
+X-Patchwork-Delegate: pbrobinson@gmail.com
+Return-Path: <u-boot-bounces@lists.denx.de>
+X-Original-To: incoming@patchwork.ozlabs.org
+Delivered-To: patchwork-incoming@legolas.ozlabs.org
+Authentication-Results: legolas.ozlabs.org;
+	dkim=pass (2048-bit key;
+ unprotected) header.d=gmail.com header.i=@gmail.com header.a=rsa-sha256
+ header.s=20230601 header.b=NLOXFHyi;
+	dkim-atps=neutral
+Authentication-Results: legolas.ozlabs.org;
+ spf=pass (sender SPF authorized) smtp.mailfrom=lists.denx.de
+ (client-ip=85.214.62.61; helo=phobos.denx.de;
+ envelope-from=u-boot-bounces@lists.denx.de; receiver=patchwork.ozlabs.org)
+Received: from phobos.denx.de (phobos.denx.de [85.214.62.61])
+	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
+	 key-exchange X25519 server-signature ECDSA (secp384r1))
+	(No client certificate requested)
+	by legolas.ozlabs.org (Postfix) with ESMTPS id 4ZcPCY0L1rz1yHt
+	for <incoming@patchwork.ozlabs.org>; Tue, 15 Apr 2025 22:50:49 +1000 (AEST)
+Received: from h2850616.stratoserver.net (localhost [IPv6:::1])
+	by phobos.denx.de (Postfix) with ESMTP id 308EB82AFB;
+	Tue, 15 Apr 2025 14:50:29 +0200 (CEST)
+Authentication-Results: phobos.denx.de;
+ dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: phobos.denx.de;
+ spf=pass smtp.mailfrom=u-boot-bounces@lists.denx.de
+Authentication-Results: phobos.denx.de;
+	dkim=pass (2048-bit key;
+ unprotected) header.d=gmail.com header.i=@gmail.com header.b="NLOXFHyi";
+	dkim-atps=neutral
+Received: by phobos.denx.de (Postfix, from userid 109)
+ id 349F98056A; Tue, 15 Apr 2025 10:30:28 +0200 (CEST)
+X-Spam-Checker-Version: SpamAssassin 3.4.2 (2018-09-13) on phobos.denx.de
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.1 required=5.0 tests=BAYES_00,DKIM_SIGNED,
+ DKIM_VALID,DKIM_VALID_AU,DKIM_VALID_EF,FREEMAIL_FROM,
+ RCVD_IN_DNSWL_BLOCKED,SPF_HELO_NONE,SPF_PASS autolearn=ham
+ autolearn_force=no version=3.4.2
+Received: from mail-lj1-x22b.google.com (mail-lj1-x22b.google.com
+ [IPv6:2a00:1450:4864:20::22b])
+ (using TLSv1.3 with cipher TLS_AES_128_GCM_SHA256 (128/128 bits))
+ (No client certificate requested)
+ by phobos.denx.de (Postfix) with ESMTPS id 3962A82047
+ for <u-boot@lists.denx.de>; Tue, 15 Apr 2025 10:30:26 +0200 (CEST)
+Authentication-Results: phobos.denx.de;
+ dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: phobos.denx.de;
+ spf=pass smtp.mailfrom=brunosampaioleite@gmail.com
+Received: by mail-lj1-x22b.google.com with SMTP id
+ 38308e7fff4ca-30bfc8faef9so49423241fa.1
+ for <u-boot@lists.denx.de>; Tue, 15 Apr 2025 01:30:26 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+ d=gmail.com; s=20230601; t=1744705825; x=1745310625; darn=lists.denx.de;
+ h=content-transfer-encoding:mime-version:references:in-reply-to
+ :message-id:date:subject:cc:to:from:from:to:cc:subject:date
+ :message-id:reply-to;
+ bh=G/bK1K44Dr1qFbZickUlvWkto/6r+BtRySFxyVDIYKY=;
+ b=NLOXFHyi7dXqHhrg8fkx5lISJ9rd6xXpixrCEDfKShdvqjvn2vMkVHivrB/UmT5q/m
+ Rcn0ad8zpPX+B1FfTwwkq4froYJpiBB3hfDhWs7VhphrtvcoOdo1odSLFDY+94ycwMrH
+ SByxwk76lvnn/WPl/K20jk3AacL4eitsWe6coH11QAw1Ff7ub3lukIMOHwph9KvyBBCO
+ rDC59cJIVrN7JGycd5bVjEbPQL20S8ElhQFxzpA/Oay5mRcuWOz9kPtXDepqVY3OTeRD
+ xVYZBQmbfdH+ddX0djm3HK4NeFgarV9FrclE37evniLeATkMGoB6vWwtfQHQzGnZi9XM
+ 1yZQ==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+ d=1e100.net; s=20230601; t=1744705825; x=1745310625;
+ h=content-transfer-encoding:mime-version:references:in-reply-to
+ :message-id:date:subject:cc:to:from:x-gm-message-state:from:to:cc
+ :subject:date:message-id:reply-to;
+ bh=G/bK1K44Dr1qFbZickUlvWkto/6r+BtRySFxyVDIYKY=;
+ b=aJrgDOltnMKa4/yUhPGvvzqv8fUsRjhtiQXqF20Ymo2bHr0kbVeb5jFe/TzFShZYoD
+ bmirjua4chjbqAuDu0hPub/QpZdCyKrlFKWI/+yp82mTlCakauWD+2ouH+uTR3LgV9/T
+ p2etUHhRr/1cdNUumKjbHK5ePRPZ1fj4kTq3Tr7PFfE2F1HctVcGt+5Eg0eGdDxB/CNY
+ fzT82UD+QbEtpyLp3b1DL5m2kvMNPjVtsUMnaldTfwrA3UicBAXnx5/aNwK8mi3ZbF1p
+ zd+QdEDjuLtdboBfffvanhpOnx7DFBWHxiQYy3nIx9kGV9apFJZZw6g2w46mIHxJ9qpK
+ vs4A==
+X-Gm-Message-State: AOJu0YwFtor9kanZ4bPXgxW0Caq1SXAjjr1eoMtteqd6a/rCRGtBSoCz
+ 2nTZsmUy7rN+RuLT0b0YkYdB4Nap8ZheIEJjBpYYy86I0HBvDOCEorH+8zHIOu0Q2A==
+X-Gm-Gg: ASbGncuvhE42LjbCtWsarbjkyrOyVA/mrkKOUPBAgzW/qnUKh7MwX9QNl5kSLSTzn2x
+ NVqmx7hNTBoFrwXVi4qN6/9oQbYDvg5w3q4qaRjK1FSsBvwHor7Qrqso4bleSYBBbp89rvTNKGN
+ cQxKrjEuhwK1IGGp5Si31mh/uHdkNoNlXvJGgUhNC5jjedj0tGwWLzKuau775LircGiFhFkXlmg
+ vvKDSS9iaFj9jLuUnbu7i3HGC98ZSaO1UWogeOvncthddQXzEPMwtiiR4+HzAFh27h9pihboSgQ
+ bf41IZ0AmlDUKSrxJRPRtfUlOJ1TRA5TMFL2vAPYxty+pgqFrriC8oOsemfm5DvdxQNjoM2NG7/
+ ZxkxfMxEZ
+X-Google-Smtp-Source: 
+ AGHT+IHMd8cQWJx/NJpA+NT/8JfqwmGZg8ekGgpeyeFGMd3DfCJ5kuQYxSAip7G9Y3zA2jvJMPH6xw==
+X-Received: by 2002:a2e:b8c4:0:b0:309:1fee:378d with SMTP id
+ 38308e7fff4ca-31049a1cf35mr46597761fa.19.1744705825108;
+ Tue, 15 Apr 2025 01:30:25 -0700 (PDT)
+Received: from brule-Precision-3590.prevas.se ([81.216.59.226])
+ by smtp.gmail.com with ESMTPSA id
+ 38308e7fff4ca-30f464cc0a2sm19679971fa.31.2025.04.15.01.30.23
+ (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+ Tue, 15 Apr 2025 01:30:24 -0700 (PDT)
+From: Bruno Leite <brunosampaioleite@gmail.com>
+To: u-boot@lists.denx.de
+Cc: pbrobinson@gmail.com, Matthias Brugger <mbrugger@suse.com>,
+ clast@prevas.dk, ravi@prevas.dk, Bruno Leite <brule@prevas.dk>,
+ Fiona Klute <fiona.klute@gmx.de>, Francois Berder <fberder@outlook.fr>,
+ Ilias Apalodimas <ilias.apalodimas@linaro.org>,
+ Martin Stolpe <martinstolpe@gmail.com>,
+ Patrice Chotard <patrice.chotard@foss.st.com>,
+ Rasmus Villemoes <rasmus.villemoes@prevas.dk>,
+ Simon Glass <sjg@chromium.org>, Tom Rini <trini@konsulko.com>
+Subject: [PATCH 1/1] rpi: copy over uart clock-frequency in DT
+Date: Tue, 15 Apr 2025 10:30:14 +0200
+Message-ID: <20250415083017.3523317-2-brunosampaioleite@gmail.com>
+X-Mailer: git-send-email 2.45.2
+In-Reply-To: <20250415083017.3523317-1-brunosampaioleite@gmail.com>
+References: <20250415083017.3523317-1-brunosampaioleite@gmail.com>
+MIME-Version: 1.0
+X-Mailman-Approved-At: Tue, 15 Apr 2025 14:50:26 +0200
+X-BeenThere: u-boot@lists.denx.de
+X-Mailman-Version: 2.1.39
+Precedence: list
+List-Id: U-Boot discussion <u-boot.lists.denx.de>
+List-Unsubscribe: <https://lists.denx.de/options/u-boot>,
+ <mailto:u-boot-request@lists.denx.de?subject=unsubscribe>
+List-Archive: <https://lists.denx.de/pipermail/u-boot/>
+List-Post: <mailto:u-boot@lists.denx.de>
+List-Help: <mailto:u-boot-request@lists.denx.de?subject=help>
+List-Subscribe: <https://lists.denx.de/listinfo/u-boot>,
+ <mailto:u-boot-request@lists.denx.de?subject=subscribe>
+Errors-To: u-boot-bounces@lists.denx.de
+Sender: "U-Boot" <u-boot-bounces@lists.denx.de>
+X-Virus-Scanned: clamav-milter 0.103.8 at phobos.denx.de
+X-Virus-Status: Clean
+
+From: Bruno Leite <brule@prevas.dk>
+
+rpi5 firmware sets uart_clk clock-frequency in
+the firmware and patches it to the DT, copy it
+over when loading a new DT.
+
+Signed-off-by: Bruno Leite <brule@prevas.dk>
+Reviewed-by: Peter Robinson <pbrobinson@gmail.com>
+Tested-by: Peter Robinson <pbrobinson@gmail.com>
+---
+
+ board/raspberrypi/rpi/rpi.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/board/raspberrypi/rpi/rpi.c b/board/raspberrypi/rpi/rpi.c
+index 70d3c35499b..5c84c324c71 100644
+--- a/board/raspberrypi/rpi/rpi.c
++++ b/board/raspberrypi/rpi/rpi.c
+@@ -602,6 +602,9 @@ void  update_fdt_from_fw(void *fdt, void *fw_fdt)
+ 
+ 	/* Bluetooth device address as provided by the firmware */
+ 	copy_property(fdt, fw_fdt, "/soc/serial@7e201000/bluetooth", "local-bd-address");
++
++	/* copy uart clk as provided by the firmware */
++	copy_property(fdt, fw_fdt, "/clocks/clk-uart", "clock-frequency");
+ }
+ 
+ int ft_board_setup(void *blob, struct bd_info *bd)

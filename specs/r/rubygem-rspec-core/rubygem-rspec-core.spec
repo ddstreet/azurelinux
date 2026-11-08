@@ -6,7 +6,7 @@
 %global	rpmminorver	.%(echo %preminorver | sed -e 's|^\\.\\.*||')
 %global	fullver	%{majorver}%{?preminorver}
 
-%global	baserelease	1
+%global	baserelease	2
 
 %global	gem_name	rspec-core
 
@@ -212,6 +212,9 @@ done
 %{gem_docdir}
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 3.13.6-2
+- Render component as lockless
+
 * Mon Oct 20 2025 Mamoru TASAKA <mtasaka@fedoraproject.org> - 3.13.6-1
 - 3.13.6
 

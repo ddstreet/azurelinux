@@ -6,7 +6,7 @@
 
 Name:       man2html
 Version:    1.6
-Release:    40.%{posttag}%{?dist}
+Release:    41.%{posttag}%{?dist}
 Summary:    Convert man pages to HTML - CGI scripts
 
 # man2html.c and debian/sources/man2html.cgi.c are man2html
@@ -178,6 +178,9 @@ rm -f %{_localstatedir}/cache/man2html/* || :
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.6-41.g
+- Render component as lockless
+
 * Thu Jul 24 2025 Fedora Release Engineering <releng@fedoraproject.org> - 1.6-40.g
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 

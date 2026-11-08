@@ -1,9 +1,6 @@
 # This spec file has been modified by azldev to include build configuration overlays.
 # Do not edit manually; changes may be overwritten.
 
-# All Azure Linux specs with overlays include this macro file, irrespective of whether new macros have been added.
-%{load:%{_sourcedir}/rocm-compilersupport.azl.macros}
-
 # The package follows LLVM's major version, but API version is still important:
 %global comgr_maj_api_ver 3
 # local, fedora
@@ -47,7 +44,7 @@
 
 Name:           rocm-compilersupport
 Version:        %{llvm_maj_ver}
-Release: %[15 + %{azl_release}].rocm%{rocm_version}%{?dist}
+Release:        22.rocm%{rocm_version}%{?dist}
 Summary:        Various AMD ROCm LLVM related services
 %if 0%{?suse_version}
 Group:          Development/Languages/Other
@@ -58,7 +55,6 @@ Url:            https://github.com/ROCm/llvm-project
 License:        NCSA and MIT
 Source0:        https://github.com/ROCm/%{upstreamname}/archive/refs/tags/rocm-%{rocm_version}.tar.gz#/%{name}-%{rocm_version}.tar.gz
 Source1:        rocm-compilersupport.prep.in
-Source9999: rocm-compilersupport.azl.macros
 
 Patch3:         0001-Remove-err_drv_duplicate_config-check.patch
 Patch4:         0001-Replace-use-of-mktemp-with-mkstemp.patch
@@ -1055,6 +1051,9 @@ echo "--gcc-triple=%{_target_cpu}-%{_vendor}-linux" > %{buildroot}%{bundle_prefi
 %{bundle_prefix}/lib/libc++experimental.a
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 19-22.rocm6.4.2
+- Render component as lockless
+
 * Tue Aug 5 2025 Tom Rix <Tom.Rix@amd.com> - 19-15.rocm6.4.2
 - Remove bootstrap logic
 - Use explicit Unix Makefiles for build-comgr step

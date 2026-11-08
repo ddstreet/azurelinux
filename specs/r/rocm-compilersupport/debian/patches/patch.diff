@@ -1,0 +1,661 @@
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/comgr/CMakeLists.txt llvm-project-rocm-6.4.0/amd/comgr/CMakeLists.txt
+--- llvm-project-rocm-6.4.0.orig/amd/comgr/CMakeLists.txt	2025-05-02 09:31:06.293812295 -0700
++++ llvm-project-rocm-6.4.0/amd/comgr/CMakeLists.txt	2025-05-02 09:04:41.458035701 -0700
+@@ -394,7 +394,7 @@
+   COMPONENT amd-comgr
+   DESTINATION "${CMAKE_INSTALL_LIBDIR}/${AMD_COMGR_PACKAGE_PREFIX}")
+ 
+-if(TARGET clangFrontendTool)
++if(true)
+   set(CLANG_LIBS
+     clangBasic
+     clangDriver
+@@ -418,31 +418,27 @@
+   set(SPIRV_STATIC_LIB "SPIRVAMDLib")
+ endif()
+ 
+-if (LLVM_LINK_LLVM_DYLIB)
+-  set(LLVM_LIBS LLVM ${SPIRV_DYNAMIC_LIB})
+-else()
+-  llvm_map_components_to_libnames(LLVM_LIBS
+-    ${LLVM_TARGETS_TO_BUILD}
+-    BinaryFormat
+-    BitReader
+-    BitWriter
+-    CodeGen
+-    Core
+-    DebugInfoDWARF
+-    Demangle
+-    IRReader
+-    Linker
+-    MC
+-    MCDisassembler
+-    MCParser
+-    Object
+-    Option
+-    Support
+-    Symbolize
+-    TargetParser
+-    ${SPIRV_STATIC_LIB}
+-    )
+-endif()
++llvm_map_components_to_libnames(LLVM_LIBS
++  ${LLVM_TARGETS_TO_BUILD}
++  BinaryFormat
++  BitReader
++  BitWriter
++  CodeGen
++  Core
++  DebugInfoDWARF
++  Demangle
++  IRReader
++  Linker
++  MC
++  MCDisassembler
++  MCParser
++  Object
++  Option
++  Support
++  Symbolize
++  TargetParser
++  ${SPIRV_STATIC_LIB}
++)
+ 
+ target_link_options(amd_comgr
+   PUBLIC
+@@ -452,9 +448,10 @@
+ 
+ target_link_libraries(amd_comgr
+   PRIVATE
+-    ${LLD_LIBS}
+-    ${LLVM_LIBS}
+-    ${CLANG_LIBS})
++  ${LLD_LIBS}
++  ${CLANG_LIBS}
++  ${LLVM_LIBS}
++)
+ 
+ if (NOT UNIX)
+   target_link_libraries(amd_comgr
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/comgr/src/comgr-compiler.cpp llvm-project-rocm-6.4.0/amd/comgr/src/comgr-compiler.cpp
+--- llvm-project-rocm-6.4.0.orig/amd/comgr/src/comgr-compiler.cpp	2025-05-02 09:31:06.294947079 -0700
++++ llvm-project-rocm-6.4.0/amd/comgr/src/comgr-compiler.cpp	2025-05-02 09:04:41.495317807 -0700
+@@ -1042,10 +1042,6 @@
+     Args.push_back("hip");
+     Args.push_back("-nogpuinc");
+     Args.push_back("--offload-device-only");
+-    Args.push_back("-isystem");
+-    Args.push_back(ROCMIncludePath.c_str());
+-    Args.push_back("-isystem");
+-    Args.push_back(HIPIncludePath.c_str());
+     // Pass a cuid that depends on the input files
+     // Otherwise, a random (which depends on the /tmp/comgr-xxxxx path) cuid is
+     // generated which causes a cache miss on every run.
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/comgr/src/comgr-env.cpp llvm-project-rocm-6.4.0/amd/comgr/src/comgr-env.cpp
+--- llvm-project-rocm-6.4.0.orig/amd/comgr/src/comgr-env.cpp	2025-05-02 09:31:06.294947079 -0700
++++ llvm-project-rocm-6.4.0/amd/comgr/src/comgr-env.cpp	2025-05-02 09:04:41.500036301 -0700
+@@ -159,14 +159,14 @@
+ 
+   virtual SmallString<128> getLLVMPathImpl() {
+     SmallString<128> LLVMPath = getROCmPath();
+-    sys::path::append(LLVMPath, "llvm");
++    //sys::path::append(LLVMPath, "llvm");
+ 
+     return LLVMPath;
+   }
+ 
+   virtual SmallString<128> getHIPPathImpl() {
+     SmallString<128> HIPPath = getROCmPath();
+-    sys::path::append(HIPPath, "hip");
++    //sys::path::append(HIPPath, "hip");
+ 
+     return HIPPath;
+   }
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/comgr/test/CMakeLists.txt llvm-project-rocm-6.4.0/amd/comgr/test/CMakeLists.txt
+--- llvm-project-rocm-6.4.0.orig/amd/comgr/test/CMakeLists.txt	2025-05-02 09:31:06.297797304 -0700
++++ llvm-project-rocm-6.4.0/amd/comgr/test/CMakeLists.txt	2025-05-02 09:04:41.504784011 -0700
+@@ -219,7 +219,6 @@
+ add_comgr_test(compile_minimal_test c)
+ add_comgr_test(compile_log_test c)
+ add_comgr_test(compile_log_remarks_test c)
+-add_comgr_test(compile_source_with_device_libs_to_bc_test c)
+ add_comgr_test(assemble_test c)
+ add_comgr_test(link_test c)
+ add_comgr_test(isa_name_parsing_test c)
+@@ -233,10 +232,8 @@
+ add_comgr_test(symbolize_test c)
+ add_comgr_test(mangled_names_test c)
+ add_comgr_test(multithread_test cpp)
+-add_comgr_test(nested_kernel_test c)
+ add_comgr_test(map_elf_virtual_address_test c)
+ add_comgr_test(compile_source_to_executable c)
+-add_comgr_test(name_expression_map_test c)
+ add_comgr_test(compile_hip_test c)
+ add_comgr_test(compile_hip_to_relocatable c)
+ add_comgr_test(mangled_names_hip_test c)
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/device-libs/AMDDeviceLibsConfig.cmake.in llvm-project-rocm-6.4.0/amd/device-libs/AMDDeviceLibsConfig.cmake.in
+--- llvm-project-rocm-6.4.0.orig/amd/device-libs/AMDDeviceLibsConfig.cmake.in	2025-05-02 09:31:06.301725014 -0700
++++ llvm-project-rocm-6.4.0/amd/device-libs/AMDDeviceLibsConfig.cmake.in	2025-05-02 09:04:41.532813586 -0700
+@@ -8,7 +8,7 @@
+ set(${_GUARD_FILE_${_PACKAGE_ID}} On)
+ endif()
+ 
+-@AMD_DEVICE_LIBS_PREFIX_CODE@
++set(AMD_DEVICE_LIBS_PREFIX "/usr/lib/rocm/llvm/lib/clang/19")
+ @AMD_DEVICE_LIBS_TARGET_CODE@
+ 
+ set_property(GLOBAL PROPERTY AMD_DEVICE_LIBS "@AMDGCN_LIB_LIST@")
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/device-libs/cmake/OCL.cmake llvm-project-rocm-6.4.0/amd/device-libs/cmake/OCL.cmake
+--- llvm-project-rocm-6.4.0.orig/amd/device-libs/cmake/OCL.cmake	2025-05-02 09:31:06.302495550 -0700
++++ llvm-project-rocm-6.4.0/amd/device-libs/cmake/OCL.cmake	2025-05-02 09:04:41.559881124 -0700
+@@ -9,7 +9,7 @@
+ # command-lines, but the only way to do this as part of the dependency graph is
+ # configure_file and we are included from multiple places. To get around this
+ # we `file(WRITE)` a file with an @variable reference and `configure_file` it.
+-cmake_policy(SET CMP0053 OLD)
++#cmake_policy(SET CMP0053 OLD)
+ 
+ if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.20.0")
+   # The policy change was for handling of relative paths for
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/device-libs/test/compile/CMakeLists.txt llvm-project-rocm-6.4.0/amd/device-libs/test/compile/CMakeLists.txt
+--- llvm-project-rocm-6.4.0.orig/amd/device-libs/test/compile/CMakeLists.txt	2025-05-02 09:31:06.328720045 -0700
++++ llvm-project-rocm-6.4.0/amd/device-libs/test/compile/CMakeLists.txt	2025-05-02 09:04:41.502770166 -0700
+@@ -80,7 +80,6 @@
+ endforeach()
+ 
+ foreach(gpu gfx600)
+-  add_isa_test(frexp ${gpu})
+ endforeach()
+ 
+ foreach(gpu gfx900)
+@@ -95,7 +94,6 @@
+ 
+ 
+ foreach(gpu gfx600 gfx700 gfx803)
+-  add_isa_test(fract ${gpu})
+   add_isa_test(native_rcp ${gpu})
+   add_isa_test(native_rsqrt ${gpu})
+   add_isa_test(native_log ${gpu})
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/hipcc/bin/hipcc.pl llvm-project-rocm-6.4.0/amd/hipcc/bin/hipcc.pl
+--- llvm-project-rocm-6.4.0.orig/amd/hipcc/bin/hipcc.pl	2025-05-02 09:31:06.329854248 -0700
++++ llvm-project-rocm-6.4.0/amd/hipcc/bin/hipcc.pl	2025-05-02 09:04:41.514543980 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env perl
++#!/usr/bin/perl
+ # Copyright (c) 2015 - 2021 Advanced Micro Devices, Inc. All rights reserved.
+ #
+ # Permission is hereby granted, free of charge, to any person obtaining a copy
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/hipcc/bin/hipconfig.pl llvm-project-rocm-6.4.0/amd/hipcc/bin/hipconfig.pl
+--- llvm-project-rocm-6.4.0.orig/amd/hipcc/bin/hipconfig.pl	2025-05-02 09:31:06.329854248 -0700
++++ llvm-project-rocm-6.4.0/amd/hipcc/bin/hipconfig.pl	2025-05-02 09:04:41.509912149 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env perl
++#!/usr/bin/perl
+ # Copyright (c) 2015 - 2021 Advanced Micro Devices, Inc. All rights reserved.
+ #
+ # Permission is hereby granted, free of charge, to any person obtaining a copy
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/hipcc/bin/hipvars.pm llvm-project-rocm-6.4.0/amd/hipcc/bin/hipvars.pm
+--- llvm-project-rocm-6.4.0.orig/amd/hipcc/bin/hipvars.pm	2025-05-02 09:31:06.329854248 -0700
++++ llvm-project-rocm-6.4.0/amd/hipcc/bin/hipvars.pm	2025-05-02 09:04:41.525889855 -0700
+@@ -68,11 +68,11 @@
+ #
+ # Since this hipcc script gets installed at two uneven hierarchical levels,
+ # linked by symlink, the absolute path of this script should be used to
+-# derive HIP_PATH, as dirname $0 could be /opt/rocm/bin or /opt/rocm/hip/bin
++# derive HIP_PATH, as dirname $0 could be /usr/bin or /opt/rocm/hip/bin
+ # depending on how it gets invoked.
+ # ROCM_PATH which points to <rocm_install_dir> is determined based on whether
+ # we find bin/rocm_agent_enumerator in the parent of HIP_PATH or not. If it is found,
+-# ROCM_PATH is defined relative to HIP_PATH else it is hardcoded to /opt/rocm.
++# ROCM_PATH is defined relative to HIP_PATH else it is hardcoded to /usr.
+ #
+ $HIP_PATH=$ENV{'HIP_PATH'} // dirname(Cwd::abs_path("$0/../")); # use parent directory of hipcc
+ if ($isWindows and defined $ENV{'HIP_PATH'}) {
+@@ -84,7 +84,7 @@
+ }elsif (-e "$HIP_PATH/../bin/rocm_agent_enumerator") { # case for backward compatibility
+     $ROCM_PATH=$ENV{'ROCM_PATH'} // dirname("$HIP_PATH"); # use parent directory of HIP_PATH
+ } else {
+-    $ROCM_PATH=$ENV{'ROCM_PATH'} // "/opt/rocm";
++    $ROCM_PATH=$ENV{'ROCM_PATH'} // "/usr";
+ }
+ $CUDA_PATH=$ENV{'CUDA_PATH'} // '/usr/local/cuda';
+ if ($isWindows and defined $ENV{'CUDA_PATH'}) {
+@@ -96,7 +96,7 @@
+ if ($isWindows or -e "$HIP_PATH/bin/clang") {
+     $HIP_CLANG_PATH=$ENV{'HIP_CLANG_PATH'} // "$HIP_PATH/bin";
+ } else {
+-    $HIP_CLANG_PATH=$ENV{'HIP_CLANG_PATH'} // "$ROCM_PATH/lib/llvm/bin";
++    $HIP_CLANG_PATH=$ENV{'HIP_CLANG_PATH'} // "/usr/lib/rocm/llvm/bin";
+ }
+ # HIP_ROCCLR_HOME is used by Windows builds
+ $HIP_ROCCLR_HOME=$ENV{'HIP_ROCCLR_HOME'};
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/hipcc/src/hipBin_amd.h llvm-project-rocm-6.4.0/amd/hipcc/src/hipBin_amd.h
+--- llvm-project-rocm-6.4.0.orig/amd/hipcc/src/hipBin_amd.h	2025-05-02 09:31:06.330519064 -0700
++++ llvm-project-rocm-6.4.0/amd/hipcc/src/hipBin_amd.h	2025-05-02 09:04:41.530547445 -0700
+@@ -209,7 +209,7 @@
+     } else {
+       compilerPath = getRoccmPath();
+       hipClangPath = compilerPath;
+-      hipClangPath /= "lib/llvm/bin";
++      hipClangPath = "/usr/lib/rocm/llvm/bin";
+     }
+ 
+     compilerPath = hipClangPath.string();
+@@ -320,7 +320,7 @@
+   }
+ 
+   if (deviceLibPath.empty()) {
+-    fs::path amdgcnBitcode = roccmPath;
++    fs::path amdgcnBitcode = "/usr/lib/rocm/llvm/lib/clang/19/";
+     amdgcnBitcode /= "amdgcn/bitcode";
+     if (fs::exists(amdgcnBitcode)) {
+       deviceLibPath = amdgcnBitcode.string();
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/hipcc/src/hipBin_base.h llvm-project-rocm-6.4.0/amd/hipcc/src/hipBin_base.h
+--- llvm-project-rocm-6.4.0.orig/amd/hipcc/src/hipBin_base.h	2025-05-02 09:31:06.330519064 -0700
++++ llvm-project-rocm-6.4.0/amd/hipcc/src/hipBin_base.h	2025-05-02 09:04:41.523620598 -0700
+@@ -24,6 +24,10 @@
+ 
+ 
+ #include "hipBin_util.h"
++#include <stdio.h>
++#include <unistd.h>
++#include <stdlib.h>
++#include <string.h>
+ #include <iostream>
+ #include <vector>
+ #include <string>
+@@ -449,7 +453,7 @@
+   " print HIP_PATH (use env var if set, else determine from hipconfig path)\n";
+   cout << "  --rocmpath,  -R    :"
+   " print ROCM_PATH (use env var if set,"
+-  " else determine from hip path or /opt/rocm)\n";
++  " else determine from hip path or /usr)\n";
+   cout << "  --cpp_config, -C   : print C++ compiler options\n";
+   cout << "  --compiler, -c     : print compiler (clang or nvcc)\n";
+   cout << "  --platform, -P     : print platform (amd or nvidia)\n";
+@@ -470,22 +474,35 @@
+   string temp_dir = hipBinUtilPtr_->getTempDir();
+   fs::path templateFs = temp_dir;
+   templateFs /= "canRunXXXXXX";
+-  string tmpFileName = hipBinUtilPtr_->mktempFile(templateFs.string());
+-  compilerName += " --version > " + tmpFileName + " 2>&1";
+   bool executable = false;
+-  if (system(const_cast<char*>(compilerName.c_str()))) {
+-    executable = false;
+-  } else {
+-    string myline;
+-    ifstream fp;
+-    fp.open(tmpFileName);
+-    if (fp.is_open()) {
+-      while (std::getline(fp, myline)) {
+-        cmdOut += myline;
++  string str = templateFs.string();
++  int fd = mkstemp(&str[0]);
++  if (fd >= 0) {
++    unlink(&str[0]);
++#if defined(_WIN32) || defined(_WIN64)
++    int tmpfd = _dup(STDOUT_FILENO);
++    int newfd = _dup2(fd, STDOUT_FILENO);
++#else
++    int tmpfd = dup(STDOUT_FILENO);
++    int newfd = dup2(fd, STDOUT_FILENO);
++#endif 
++    if (newfd != -1) {
++      compilerName += " --version 2>&1";
++      if (!system(const_cast<char*>(compilerName.c_str()))) {
++	if (!lseek(newfd, SEEK_SET, 0)) {
++	  char output[128] = {0};
++	  ssize_t b;
++	  memset(output, 0, 128);
++	  while (read(newfd, &output, 128) > 0) {
++	    cmdOut += output;
++	    memset(output, 0, 128);
++	  }
++	  executable = true;
++	}
+       }
++      close(newfd);
++      dup2(tmpfd, STDOUT_FILENO);
+     }
+-    fp.close();
+-    executable = true;
+   }
+   return executable;
+ }
+diff -ruN llvm-project-rocm-6.4.0.orig/amd/hipcc/src/hipBin_util.h llvm-project-rocm-6.4.0/amd/hipcc/src/hipBin_util.h
+--- llvm-project-rocm-6.4.0.orig/amd/hipcc/src/hipBin_util.h	2025-05-02 09:31:06.330519064 -0700
++++ llvm-project-rocm-6.4.0/amd/hipcc/src/hipBin_util.h	2025-05-02 09:04:40.606931906 -0700
+@@ -158,8 +158,6 @@
+                       string replaceWith) const;
+   SystemCmdOut exec(const char* cmd, bool printConsole) const;
+   string getTempDir();
+-  void deleteTempFiles();
+-  string mktempFile(string name);
+   string trim(string str) const;
+   string readConfigMap(map<string, string> hipVersionMap,
+                        string keyName, string defaultValue) const;
+@@ -178,19 +176,6 @@
+ 
+ // deleting temp files created
+ HipBinUtil::~HipBinUtil() {
+-  deleteTempFiles();
+-}
+-
+-// create temp file with the template name
+-string HipBinUtil::mktempFile(string name) {
+-  string fileName;
+-#if defined(_WIN32) || defined(_WIN64)
+-  fileName = _mktemp(&name[0]);
+-#else
+-  fileName = mktemp(&name[0]);
+-#endif
+-  tmpFiles_.push_back(fileName);
+-  return fileName;
+ }
+ 
+ // gets the path of the executable name
+@@ -291,20 +276,6 @@
+   return configMap;
+ }
+ 
+-// Delete all created temporary files
+-void HipBinUtil::deleteTempFiles() {
+-  // Deleting temp files vs the temp directory
+-  for (unsigned int i = 0; i < tmpFiles_.size(); i++) {
+-    try {
+-      if (!fs::remove(tmpFiles_.at(i)))
+-        std::cerr << "Error deleting temp name: "<< tmpFiles_.at(i) <<endl;
+-    }
+-    catch(...) {
+-      std::cerr << "Error deleting temp name: "<< tmpFiles_.at(i) <<endl;
+-    }
+-  }
+-}
+-
+ // Create a new temporary directory and return it
+ string HipBinUtil::getTempDir() {
+   // mkdtemp is only applicable for unix and not windows.
+diff -ruN llvm-project-rocm-6.4.0.orig/clang/cmake/modules/AddClang.cmake llvm-project-rocm-6.4.0/clang/cmake/modules/AddClang.cmake
+--- llvm-project-rocm-6.4.0.orig/clang/cmake/modules/AddClang.cmake	2025-05-02 09:31:06.520776791 -0700
++++ llvm-project-rocm-6.4.0/clang/cmake/modules/AddClang.cmake	2025-05-02 09:04:41.490210989 -0700
+@@ -117,7 +117,7 @@
+     if(TARGET ${lib})
+       target_link_libraries(${lib} INTERFACE ${LLVM_COMMON_LIBS})
+ 
+-      if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY OR ARG_INSTALL_WITH_TOOLCHAIN)
++      if (ARG_SHARED AND (NOT LLVM_INSTALL_TOOLCHAIN_ONLY OR ARG_INSTALL_WITH_TOOLCHAIN))
+         get_target_export_arg(${name} Clang export_to_clangtargets UMBRELLA clang-libraries)
+         install(TARGETS ${lib}
+           COMPONENT ${lib}
+diff -ruN llvm-project-rocm-6.4.0.orig/clang/lib/Driver/Driver.cpp llvm-project-rocm-6.4.0/clang/lib/Driver/Driver.cpp
+--- llvm-project-rocm-6.4.0.orig/clang/lib/Driver/Driver.cpp	2025-05-02 09:31:06.577317121 -0700
++++ llvm-project-rocm-6.4.0/clang/lib/Driver/Driver.cpp	2025-05-02 09:04:40.591023315 -0700
+@@ -1075,19 +1075,6 @@
+     }
+   }
+ 
+-  // First try to find config file specified in command line.
+-  if (CLOptions) {
+-    std::vector<std::string> ConfigFiles =
+-        CLOptions->getAllArgValues(options::OPT_config);
+-    if (ConfigFiles.size() > 1) {
+-      if (!llvm::all_of(ConfigFiles, [ConfigFiles](const std::string &s) {
+-            return s == ConfigFiles[0];
+-          })) {
+-        Diag(diag::err_drv_duplicate_config);
+-        return true;
+-      }
+-    }
+-  }
+   // Prepare list of directories where config file is searched for.
+   StringRef CfgFileSearchDirs[] = {UserConfigDir, SystemConfigDir, Dir};
+   ExpCtx.setSearchDirs(CfgFileSearchDirs);
+diff -ruN llvm-project-rocm-6.4.0.orig/clang/lib/Driver/ToolChains/AMDGPU.cpp llvm-project-rocm-6.4.0/clang/lib/Driver/ToolChains/AMDGPU.cpp
+--- llvm-project-rocm-6.4.0.orig/clang/lib/Driver/ToolChains/AMDGPU.cpp	2025-05-02 09:31:06.577913338 -0700
++++ llvm-project-rocm-6.4.0/clang/lib/Driver/ToolChains/AMDGPU.cpp	2025-05-02 09:04:41.557292964 -0700
+@@ -272,7 +272,7 @@
+   ROCmSearchDirs.emplace_back(D.ResourceDir,
+                               /*StrictChecking=*/true);
+ 
+-  ROCmSearchDirs.emplace_back(D.SysRoot + "/opt/rocm",
++  ROCmSearchDirs.emplace_back(D.SysRoot + "/usr",
+                               /*StrictChecking=*/true);
+ 
+   // Find the latest /opt/rocm-{release} directory.
+diff -ruN llvm-project-rocm-6.4.0.orig/clang/lib/Driver/ToolChains/Gnu.cpp llvm-project-rocm-6.4.0/clang/lib/Driver/ToolChains/Gnu.cpp
+--- llvm-project-rocm-6.4.0.orig/clang/lib/Driver/ToolChains/Gnu.cpp	2025-05-02 09:31:06.578683302 -0700
++++ llvm-project-rocm-6.4.0/clang/lib/Driver/ToolChains/Gnu.cpp	2025-05-02 09:04:41.553356256 -0700
+@@ -521,7 +521,7 @@
+   }
+ 
+   // Make sure openmp finds it libomp.so before all others.
+-  if (Args.hasArg(options::OPT_fopenmp) ||
++  if (1 || Args.hasArg(options::OPT_fopenmp) ||
+       JA.isHostOffloading(Action::OFK_OpenMP)) {
+     addDirectoryList(Args, CmdArgs, "-L", "LIBRARY_PATH");
+     CmdArgs.push_back(Args.MakeArgString("-L" + D.Dir + "/../lib"));
+diff -ruN llvm-project-rocm-6.4.0.orig/clang/lib/Headers/CMakeLists.txt llvm-project-rocm-6.4.0/clang/lib/Headers/CMakeLists.txt
+--- llvm-project-rocm-6.4.0.orig/clang/lib/Headers/CMakeLists.txt	2025-05-02 09:31:06.586334337 -0700
++++ llvm-project-rocm-6.4.0/clang/lib/Headers/CMakeLists.txt	2025-05-02 09:04:40.645352582 -0700
+@@ -291,6 +291,7 @@
+ 
+ set(cuda_wrapper_files
+   cuda_wrappers/algorithm
++  cuda_wrappers/array
+   cuda_wrappers/cmath
+   cuda_wrappers/complex
+   cuda_wrappers/new
+diff -ruN llvm-project-rocm-6.4.0.orig/clang/lib/Headers/cuda_wrappers/array llvm-project-rocm-6.4.0/clang/lib/Headers/cuda_wrappers/array
+--- llvm-project-rocm-6.4.0.orig/clang/lib/Headers/cuda_wrappers/array	1969-12-31 16:00:00.000000000 -0800
++++ llvm-project-rocm-6.4.0/clang/lib/Headers/cuda_wrappers/array	2025-05-02 09:04:40.645598948 -0700
+@@ -0,0 +1,39 @@
++/*===---- array - CUDA wrapper for <array> ------------------------------===
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a copy
++ * of this software and associated documentation files (the "Software"), to deal
++ * in the Software without restriction, including without limitation the rights
++ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++ * copies of the Software, and to permit persons to whom the Software is
++ * furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in
++ * all copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++ * THE SOFTWARE.
++ *
++ *===-----------------------------------------------------------------------===
++ */
++
++#ifndef __CLANG_CUDA_WRAPPERS_ARRAY
++#define __CLANG_CUDA_WRAPPERS_ARRAY
++
++#if _GLIBCXX_RELEASE >= 15
++// https://github.com/pytorch/pytorch/issues/145608
++#pragma push_macro("__glibcxx_requires_subscript")
++#define __glibcxx_requires_subscript(n) 
++#endif
++
++#include_next <array>
++
++#if _GLIBCXX_RELEASE >= 15
++#pragma pop_macro("__glibcxx_requires_subscript")
++#endif
++
++#endif // include guard
+diff -ruN llvm-project-rocm-6.4.0.orig/clang/tools/clang-format/clang-format-diff.py llvm-project-rocm-6.4.0/clang/tools/clang-format/clang-format-diff.py
+--- llvm-project-rocm-6.4.0.orig/clang/tools/clang-format/clang-format-diff.py	2025-05-02 09:31:07.674458764 -0700
++++ llvm-project-rocm-6.4.0/clang/tools/clang-format/clang-format-diff.py	2025-05-02 09:04:41.549146693 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python3
++#!/usr/bin/python3
+ #
+ # ===- clang-format-diff.py - ClangFormat Diff Reformatter ----*- python -*--===#
+ #
+diff -ruN llvm-project-rocm-6.4.0.orig/clang/tools/clang-format/git-clang-format llvm-project-rocm-6.4.0/clang/tools/clang-format/git-clang-format
+--- llvm-project-rocm-6.4.0.orig/clang/tools/clang-format/git-clang-format	2025-05-02 09:31:07.674823703 -0700
++++ llvm-project-rocm-6.4.0/clang/tools/clang-format/git-clang-format	2025-05-02 09:04:41.545122941 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python3
++#!/usr/bin/python3
+ #
+ #===- git-clang-format - ClangFormat Git Integration ---------*- python -*--===#
+ #
+diff -ruN llvm-project-rocm-6.4.0.orig/clang/utils/hmaptool/hmaptool llvm-project-rocm-6.4.0/clang/utils/hmaptool/hmaptool
+--- llvm-project-rocm-6.4.0.orig/clang/utils/hmaptool/hmaptool	2025-05-02 09:31:07.703138227 -0700
++++ llvm-project-rocm-6.4.0/clang/utils/hmaptool/hmaptool	2025-05-02 09:04:41.547253627 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python3
++#!/usr/bin/python3
+ from __future__ import absolute_import, division, print_function
+ 
+ from ctypes import ArgumentError
+diff -ruN llvm-project-rocm-6.4.0.orig/clang-tools-extra/clang-include-fixer/find-all-symbols/tool/run-find-all-symbols.py llvm-project-rocm-6.4.0/clang-tools-extra/clang-include-fixer/find-all-symbols/tool/run-find-all-symbols.py
+--- llvm-project-rocm-6.4.0.orig/clang-tools-extra/clang-include-fixer/find-all-symbols/tool/run-find-all-symbols.py	2025-05-02 09:31:06.379285847 -0700
++++ llvm-project-rocm-6.4.0/clang-tools-extra/clang-include-fixer/find-all-symbols/tool/run-find-all-symbols.py	2025-05-02 09:04:41.519239231 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ #
+ # =- run-find-all-symbols.py - Parallel find-all-symbols runner -*- python  -*-=#
+ #
+diff -ruN llvm-project-rocm-6.4.0.orig/clang-tools-extra/clang-tidy/tool/clang-tidy-diff.py llvm-project-rocm-6.4.0/clang-tools-extra/clang-tidy/tool/clang-tidy-diff.py
+--- llvm-project-rocm-6.4.0.orig/clang-tools-extra/clang-tidy/tool/clang-tidy-diff.py	2025-05-02 09:31:06.411575661 -0700
++++ llvm-project-rocm-6.4.0/clang-tools-extra/clang-tidy/tool/clang-tidy-diff.py	2025-05-02 09:04:41.551016466 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python3
++#!/usr/bin/python3
+ #
+ # ===- clang-tidy-diff.py - ClangTidy Diff Checker -----------*- python -*--===#
+ #
+diff -ruN llvm-project-rocm-6.4.0.orig/clang-tools-extra/clang-tidy/tool/run-clang-tidy.py llvm-project-rocm-6.4.0/clang-tools-extra/clang-tidy/tool/run-clang-tidy.py
+--- llvm-project-rocm-6.4.0.orig/clang-tools-extra/clang-tidy/tool/run-clang-tidy.py	2025-05-02 09:31:06.411575661 -0700
++++ llvm-project-rocm-6.4.0/clang-tools-extra/clang-tidy/tool/run-clang-tidy.py	2025-05-02 09:04:41.516952801 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python3
++#!/usr/bin/python3
+ #
+ # ===- run-clang-tidy.py - Parallel clang-tidy runner --------*- python -*--===#
+ #
+diff -ruN llvm-project-rocm-6.4.0.orig/lld/ELF/Config.h llvm-project-rocm-6.4.0/lld/ELF/Config.h
+--- llvm-project-rocm-6.4.0.orig/lld/ELF/Config.h	2025-05-02 09:31:08.721724568 -0700
++++ llvm-project-rocm-6.4.0/lld/ELF/Config.h	2025-05-02 09:04:41.536549644 -0700
+@@ -252,7 +252,7 @@
+   bool fortranCommon;
+   bool gcSections;
+   bool gdbIndex;
+-  bool gnuHash = false;
++  bool gnuHash = true;
+   bool gnuUnique;
+   bool hasDynSymTab;
+   bool ignoreDataAddressEquality;
+@@ -295,7 +295,7 @@
+   bool shared;
+   bool symbolic;
+   bool isStatic = false;
+-  bool sysvHash = false;
++  bool sysvHash = true;
+   bool target1Rel;
+   bool trace;
+   bool thinLTOEmitImportsFiles;
+diff -ruN llvm-project-rocm-6.4.0.orig/llvm/include/llvm/ADT/SmallVector.h llvm-project-rocm-6.4.0/llvm/include/llvm/ADT/SmallVector.h
+--- llvm-project-rocm-6.4.0.orig/llvm/include/llvm/ADT/SmallVector.h	2025-05-02 09:31:09.274721836 -0700
++++ llvm-project-rocm-6.4.0/llvm/include/llvm/ADT/SmallVector.h	2025-05-02 09:04:41.562094365 -0700
+@@ -26,6 +26,7 @@
+ #include <iterator>
+ #include <limits>
+ #include <memory>
++#include <cstdint>
+ #include <new>
+ #include <type_traits>
+ #include <utility>
+diff -ruN llvm-project-rocm-6.4.0.orig/llvm/lib/Analysis/ConstantFolding.cpp llvm-project-rocm-6.4.0/llvm/lib/Analysis/ConstantFolding.cpp
+--- llvm-project-rocm-6.4.0.orig/llvm/lib/Analysis/ConstantFolding.cpp	2025-05-02 09:31:09.354722980 -0700
++++ llvm-project-rocm-6.4.0/llvm/lib/Analysis/ConstantFolding.cpp	2025-05-02 09:04:41.566358140 -0700
+@@ -1784,7 +1784,7 @@
+ }
+ 
+ #if defined(HAS_IEE754_FLOAT128) && defined(HAS_LOGF128)
+-Constant *ConstantFoldFP128(long double (*NativeFP)(long double),
++Constant *ConstantFoldFP128(float128 (*NativeFP)(float128),
+                             const APFloat &V, Type *Ty) {
+   llvm_fenv_clearexcept();
+   float128 Result = NativeFP(V.convertToQuad());
+diff -ruN llvm-project-rocm-6.4.0.orig/llvm/lib/Target/AMDGPU/MCTargetDesc/AMDGPUMCTargetDesc.h llvm-project-rocm-6.4.0/llvm/lib/Target/AMDGPU/MCTargetDesc/AMDGPUMCTargetDesc.h
+--- llvm-project-rocm-6.4.0.orig/llvm/lib/Target/AMDGPU/MCTargetDesc/AMDGPUMCTargetDesc.h	2025-05-02 09:31:09.430504522 -0700
++++ llvm-project-rocm-6.4.0/llvm/lib/Target/AMDGPU/MCTargetDesc/AMDGPUMCTargetDesc.h	2025-05-02 09:04:41.564037216 -0700
+@@ -16,6 +16,7 @@
+ #define LLVM_LIB_TARGET_AMDGPU_MCTARGETDESC_AMDGPUMCTARGETDESC_H
+ 
+ #include <memory>
++#include <cstdint>
+ 
+ namespace llvm {
+ class Target;
+diff -ruN llvm-project-rocm-6.4.0.orig/llvm/tools/gold/gold-plugin.cpp llvm-project-rocm-6.4.0/llvm/tools/gold/gold-plugin.cpp
+--- llvm-project-rocm-6.4.0.orig/llvm/tools/gold/gold-plugin.cpp	2025-05-02 09:31:11.672631176 -0700
++++ llvm-project-rocm-6.4.0/llvm/tools/gold/gold-plugin.cpp	2025-05-02 09:04:40.619890638 -0700
+@@ -1099,10 +1099,10 @@
+         std::make_unique<llvm::raw_fd_ostream>(FD, true));
+   };
+ 
+-  auto AddBuffer = [&](size_t Task, const Twine &moduleName,
++  auto AddBuffer = [&](size_t Task, const Twine &ModuleName,
+                        std::unique_ptr<MemoryBuffer> MB) {
+-    auto Stream = *AddStream(Task, ModuleName);
+-    Stream->OS << MB->getBuffer();
++    auto Stream = AddStream(Task, ModuleName);
++    *Stream->OS << MB->getBuffer();
+     check(Stream->commit(), "Failed to commit cache");
+   };
+ 
+diff -ruN llvm-project-rocm-6.4.0.orig/llvm/tools/opt-viewer/extract-reproducers.py llvm-project-rocm-6.4.0/llvm/tools/opt-viewer/extract-reproducers.py
+--- llvm-project-rocm-6.4.0.orig/llvm/tools/opt-viewer/extract-reproducers.py	2025-05-02 09:31:11.696833731 -0700
++++ llvm-project-rocm-6.4.0/llvm/tools/opt-viewer/extract-reproducers.py	2025-05-02 09:04:41.541739169 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ 
+ desc = """
+ A script to extract ConstraintElimination's reproducer remarks. The extracted
+diff -ruN llvm-project-rocm-6.4.0.orig/llvm/tools/opt-viewer/opt-diff.py llvm-project-rocm-6.4.0/llvm/tools/opt-viewer/opt-diff.py
+--- llvm-project-rocm-6.4.0.orig/llvm/tools/opt-viewer/opt-diff.py	2025-05-02 09:31:11.696833731 -0700
++++ llvm-project-rocm-6.4.0/llvm/tools/opt-viewer/opt-diff.py	2025-05-02 09:04:41.541926883 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ 
+ from __future__ import print_function
+ 
+diff -ruN llvm-project-rocm-6.4.0.orig/llvm/tools/opt-viewer/optrecord.py llvm-project-rocm-6.4.0/llvm/tools/opt-viewer/optrecord.py
+--- llvm-project-rocm-6.4.0.orig/llvm/tools/opt-viewer/optrecord.py	2025-05-02 09:31:11.696833731 -0700
++++ llvm-project-rocm-6.4.0/llvm/tools/opt-viewer/optrecord.py	2025-05-02 09:04:41.542951068 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ 
+ from __future__ import print_function
+ 
+diff -ruN llvm-project-rocm-6.4.0.orig/llvm/tools/opt-viewer/opt-stats.py llvm-project-rocm-6.4.0/llvm/tools/opt-viewer/opt-stats.py
+--- llvm-project-rocm-6.4.0.orig/llvm/tools/opt-viewer/opt-stats.py	2025-05-02 09:31:11.696833731 -0700
++++ llvm-project-rocm-6.4.0/llvm/tools/opt-viewer/opt-stats.py	2025-05-02 09:04:41.542101784 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ 
+ from __future__ import print_function
+ 
+diff -ruN llvm-project-rocm-6.4.0.orig/llvm/tools/opt-viewer/opt-viewer.py llvm-project-rocm-6.4.0/llvm/tools/opt-viewer/opt-viewer.py
+--- llvm-project-rocm-6.4.0.orig/llvm/tools/opt-viewer/opt-viewer.py	2025-05-02 09:31:11.696833731 -0700
++++ llvm-project-rocm-6.4.0/llvm/tools/opt-viewer/opt-viewer.py	2025-05-02 09:04:41.542286142 -0700
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ 
+ from __future__ import print_function
+ 

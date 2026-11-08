@@ -1,0 +1,11 @@
+--- a/recommonmark/parser.py	2018-10-20 19:52:19.484541699 +0200
++++ a/recommonmark/parser.py	2018-10-20 19:52:34.696733102 +0200
+@@ -2,7 +2,7 @@
+ 
+ from docutils import parsers, nodes
+ 
+-from CommonMark import Parser
++from commonmark import Parser
+ 
+ from warnings import warn
+ 

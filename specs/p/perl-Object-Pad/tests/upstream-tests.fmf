@@ -1,0 +1,4 @@
+summary: Upstream tests
+component: perl-Object-Pad
+require: perl-Object-Pad-tests
+test: /usr/libexec/perl-Object-Pad/test

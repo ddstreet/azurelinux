@@ -3,7 +3,7 @@
 
 %global antlr_version 3.5.3
 %global javascript_runtime_version 3.1
-%global baserelease 16
+%global baserelease 17
 
 # This package needs itself to build.  Use this to bootstrap on a new system.
 %bcond bootstrap 0
@@ -259,6 +259,9 @@ popd
 %doc tool/LICENSE.txt
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1:3.5.3-17
+- Render component as lockless
+
 * Fri Feb 20 2026 Jerry James <loganjerry@gmail.com> - 1:3.5.3-16
 - Remove the C and C++ backends
 - They contain files with a disallowed license

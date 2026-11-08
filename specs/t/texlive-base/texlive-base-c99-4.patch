@@ -1,0 +1,53 @@
+Fix the setsid-after-vfork configure check to avoid implicit
+declarations of wait, exit.  This ensures that the outcome of the
+check does not change with compilers which do not support implicit
+function declarations.
+
+Submitted upstream:
+
+  <https://tug.org/pipermail/tex-live/2023-January/048833.html>
+
+diff -up texlive-base-20220321/source/texk/xdvik/configure.c99-4 texlive-base-20220321/source/texk/xdvik/configure
+--- texlive-base-20220321/source/texk/xdvik/configure.c99-4	2023-01-31 09:04:59.026325806 +0100
++++ texlive-base-20220321/source/texk/xdvik/configure	2023-01-31 09:05:14.250169332 +0100
+@@ -16406,6 +16406,9 @@ else $as_nop
+ #ifdef HAVE_UNISTD_H
+ #include <unistd.h>
+ #endif
++#ifdef HAVE_SYS_WAIT_H
++#include <sys/wait.h>
++#endif
+ #ifdef HAVE_VFORK_H
+ #include <vfork.h>
+ #endif
+@@ -16427,7 +16430,7 @@ main (void)
+ 
+     while (wait(&status) != child)
+       ;
+-    exit(
++    _exit(
+ 	 /* Was there some problem with vforking?  */
+ 	 child < 0
+ 
+diff -up texlive-base-20220321/source/texk/xdvik/m4/xdvi-func-setsid-in-fork.m4.c99-4 texlive-base-20220321/source/texk/xdvik/m4/xdvi-func-setsid-in-fork.m4
+--- texlive-base-20220321/source/texk/xdvik/m4/xdvi-func-setsid-in-fork.m4.c99-4	2023-01-31 08:45:31.417794738 +0100
++++ texlive-base-20220321/source/texk/xdvik/m4/xdvi-func-setsid-in-fork.m4	2023-01-31 08:45:43.901652431 +0100
+@@ -22,6 +22,9 @@ AC_DEFUN([XDVI_FUNC_SETSID_IN_VFORK],
+ #ifdef HAVE_UNISTD_H
+ #include <unistd.h>
+ #endif
++#ifdef HAVE_SYS_WAIT_H
++#include <sys/wait.h>
++#endif
+ #ifdef HAVE_VFORK_H
+ #include <vfork.h>
+ #endif]],
+@@ -40,7 +43,7 @@ AC_DEFUN([XDVI_FUNC_SETSID_IN_VFORK],
+ 
+     while (wait(&status) != child)
+       ;
+-    exit(
++    _exit(
+ 	 /* Was there some problem with vforking?  */
+ 	 child < 0
+ 

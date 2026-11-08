@@ -1,0 +1,35 @@
+Partial backport of this upstream revision:
+
+------------------------------------------------------------------------
+r65582 | hironobu | 2023-01-19 15:15:46 +0100 (Thu, 19 Jan 2023) | 1 line
+
+synctexdir: update from GH
+
+Relevant Git commit:
+
+commit 2897465154892a7737dcc90e4d6a00a1d1b3922c
+Author: Germán Poo-Caamaño <gpoo@gnome.org>
+Date:   Sat May 30 16:15:27 2020 -0400
+
+    Fix implicit declaration of vasprintf
+    
+    Fix build when compiling with `-Werror=implicit-function-declaration`.
+
+
+Index: Build/source/texk/web2c/synctexdir/synctex_parser.c
+===================================================================
+--- Build/source/texk/web2c/synctexdir/synctex_parser.c	(revision 65581)
++++ Build/source/texk/web2c/synctexdir/synctex_parser.c	(revision 65582)
+@@ -83,6 +83,11 @@
+  *  First level objects are sheets and forms, containing boxes, glues, kerns...
+  *  The third tree allows to browse leaves according to tag and line.
+  */
++/* Declare _GNU_SOURCE for accessing vasprintf. For MSC compiler, vasprintf is
++ * defined in this file
++ */
++#define _GNU_SOURCE
++
+ #   if defined(SYNCTEX_USE_LOCAL_HEADER)
+ #       include "synctex_parser_local.h"
+ #   else
+

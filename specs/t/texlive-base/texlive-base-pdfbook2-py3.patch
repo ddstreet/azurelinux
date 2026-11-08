@@ -1,0 +1,102 @@
+diff -up ./scripts/pdfbook2/pdfbook2.py3 ./scripts/pdfbook2/pdfbook2
+--- ./scripts/pdfbook2/pdfbook2.py3	2020-01-10 08:49:13.071743210 -0500
++++ ./scripts/pdfbook2/pdfbook2	2020-01-10 08:50:18.938615714 -0500
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ """ pdfbook2 - transform pdf files to booklets
+                    
+     This program is free software: you can redistribute it and/or modify
+@@ -29,15 +29,15 @@ import shutil
+ 
+ def booklify( name, opts ):
+     #------------------------------------------------------ Check if file exists
+-    print "\nProcessing", name
++    print("\nProcessing", name)
+     if not os.path.isfile( name ):
+-        print "SKIP: file not found."
++        print("SKIP: file not found.")
+         return
+-    print "Getting bounds...",
++    print("Getting bounds...", end=' ')
+     sys.stdout.flush()
+ 
+     #---------------------------------------------------------- useful constants
+-    bboxName = "%%HiResBoundingBox:"
++    bboxName = b"%%HiResBoundingBox:"
+     tmpFile = ".crop-tmp.pdf"
+ 
+     #------------------------------------------------- find min/max bounding box
+@@ -50,8 +50,8 @@ def booklify( name, opts ):
+         p.wait()
+         out, err = p.communicate()
+         if len( err ) != 0:
+-            print err
+-            print "\n\nABORT: Problem getting bounds"
++            print(err)
++            print("\n\nABORT: Problem getting bounds")
+             sys.exit( 1 )
+         lines = out.splitlines()
+         bboxes = [s[len( bboxName ) + 1:] for s in lines if s.startswith( bboxName )]
+@@ -69,11 +69,11 @@ def booklify( name, opts ):
+         minLOdd -= maxWidth - widthOdd
+         maxREven += maxWidth - widthEven
+ 
+-        print "done"
++        print("done")
+         sys.stdout.flush()
+ 
+     #--------------------------------------------- crop file to area of interest
+-        print "cropping...",
++        print("cropping...", end=' ')
+         sys.stdout.flush()
+         p = subprocess.Popen( ["pdfcrop",
+                                "--bbox-odd", "{L} {T} {R} {B}".format( L = minLOdd - opts.innerMargin / 2,
+@@ -92,16 +92,16 @@ def booklify( name, opts ):
+         p.wait()
+         out, err = p.communicate()
+         if len( err ) != 0:
+-            print err
+-            print "\n\nABORT: Problem with cropping"
++            print(err)
++            print("\n\nABORT: Problem with cropping")
+             sys.exit( 1 )
+-        print "done"
++        print("done")
+         sys.stdout.flush()
+     else:
+         shutil.copy( name, tmpFile )
+ 
+     #-------------------------------------------------------- create the booklet
+-    print "create booklet...",
++    print("create booklet...", end=' ')
+     sys.stdout.flush()
+     pdfJamCallList = [ "pdfjam",
+                        "--booklet", "true",
+@@ -124,7 +124,7 @@ def booklify( name, opts ):
+         p.wait()
+         out, err = p.communicate()
+         if len( out ) == 0:
+-            print "\n\nABORT: The everyshi.sty latex package is needed for short-edge."
++            print("\n\nABORT: The everyshi.sty latex package is needed for short-edge.")
+             sys.exit( 1 )
+         else:
+             pdfJamCallList.append( "--preamble" )
+@@ -139,7 +139,7 @@ def booklify( name, opts ):
+     #-------------------------------------------- move file and remove temp file
+     os.rename( tmpFile[:-4] + "-book.pdf", name[:-4] + "-book.pdf" )
+     os.remove( tmpFile )
+-    print "done"
++    print("done")
+     sys.stdout.flush()
+ 
+ 
+@@ -228,7 +228,7 @@ if __name__ == "__main__":
+     if len( args ) == 0:
+         parser.print_version()
+         parser.print_help()
+-        print ""
++        print("")
+         sys.exit( 2 )
+ 
+     #------------------------------------------- run for each provided file name

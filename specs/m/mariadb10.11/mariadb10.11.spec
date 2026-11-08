@@ -197,7 +197,7 @@ Provides: mariadb%{majorversion}%{?1:-%{1}}%{?_isa} = %{sameevr}\
 
 Name:             %{majorname}%{majorversion}
 Version:          %{package_version}
-Release:          2%{?with_debug:.debug}%{?dist}
+Release:          3%{?with_debug:.debug}%{?dist}
 Epoch:            3
 
 Summary:          A very fast and robust SQL database server
@@ -1865,6 +1865,9 @@ fi
 %endif
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 3:10.11.18-3
+- Render component as lockless
+
 * Thu Jun 25 2026 František Zatloukal <fzatlouk@redhat.com> - 3:10.11.18-2
 - Rebuilt for fmt/spdlog
 

@@ -1,0 +1,36 @@
+---
+- hosts: localhost
+  roles:
+  - role: standard-test-source
+    tags:
+    - always
+    required_packages:
+    - autoconf
+    - automake
+  - role: standard-test-basic
+    tags:
+    - atomic
+    - classic
+    - container
+    required_packages:
+    - augeas
+    - augeas-devel
+    - libxml2-devel
+    - gcc
+    - pkg-config
+    - chrony                      # test its configs
+    - fuse                        # test its configs
+    - iscsi-initiator-utils       # test its configs
+    - lvm2                        # test its configs
+    - mdadm                       # test its configs
+    - openssh-server              # test its configs
+    - rsync                       # test its configs
+    - rsyslog                     # test its configs
+    - sudo                        # test its configs
+    tests:
+    - augtool_test:
+        dir: .
+        run: ./augtool_test.sh
+    - devel:
+        dir: .
+        run: ./devel.sh

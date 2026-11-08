@@ -1,0 +1,12 @@
+diff -up texlive-base-20200327/source/texk/kpathsea/texmf.cnf.me texlive-base-20200327/source/texk/kpathsea/texmf.cnf
+--- texlive-base-20200327/source/texk/kpathsea/texmf.cnf.me	2020-09-23 09:35:26.729192291 +0200
++++ texlive-base-20200327/source/texk/kpathsea/texmf.cnf	2020-09-23 09:36:01.849651692 +0200
+@@ -786,7 +786,7 @@ texmf_casefold_search = 1
+ % For some xy-pic samples, you may need as much as 700000 words of memory.
+ % For the vast majority of documents, 60000 or less will do.
+ %
+-main_memory = 5000000 % words of inimemory available; also applies to inimf&mp
++main_memory = 6000000 % words of inimemory available; also applies to inimf&mp
+ extra_mem_top = 0     % extra high memory for chars, tokens, etc.
+ extra_mem_bot = 0     % extra low memory for boxes, glue, breakpoints, etc.
+ 

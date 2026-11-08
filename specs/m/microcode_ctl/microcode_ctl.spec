@@ -7,7 +7,7 @@
 Summary:        Tool to transform and deploy CPU microcode update for x86
 Name:           microcode_ctl
 Version:        2.1
-Release:        71.1%{?dist}
+Release:        72.1%{?dist}
 Epoch:          2
 License:        GPL-2.0-or-later AND LicenseRef-Fedora-Firmware
 URL:            https://pagure.io/microcode_ctl
@@ -39,6 +39,9 @@ make DESTDIR=%{buildroot} PREFIX=%{_prefix} INSDIR=/usr/sbin install clean
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 2:2.1-72.1
+- Render component as lockless
+
 * Wed Feb 18 2026 Eugene Syromiatnikov <evgsyr@gmail.com> 2:2.1-71.1
 - Update to upstream 2.1-51. 20260210
  - Addition of 06-ae-01/0x97 (GNR-D B0/B1) microcode at revision

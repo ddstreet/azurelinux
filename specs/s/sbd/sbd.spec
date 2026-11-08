@@ -22,7 +22,7 @@
 %global shortcommit %(echo %{longcommit}|cut -c1-8)
 %global modified %(echo %{longcommit}-|cut -f2 -d-)
 %global github_owner Clusterlabs
-%global baserelease 2
+%global baserelease 3
 
 %ifarch s390x s390
 # minimum timeout on LPAR diag288 watchdog is 15s
@@ -179,6 +179,9 @@ fi
 %{_libdir}/libsbdtestbed*
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.5.2-3
+- Render component as lockless
+
 * Thu Sep 18 2025 Klaus Wenninger <kwenning@redhat.com> - 1.5.2-2
 - Convert STI tests to TMT (rhbz#2383068)
 - use baserelease as that rpmdev-bumpspec can be used

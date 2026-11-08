@@ -1,0 +1,15 @@
+summary: Fonts related tests
+discover:
+    how: fmf
+    url: https://src.fedoraproject.org/tests/fonts
+prepare:
+    name: tmt
+    how: install
+    package: google-roboto-slab-fonts
+execute:
+    how: tmt
+environment:
+    PACKAGE: google-roboto-slab-fonts
+    FONT_ALIAS: serif
+    FONT_FAMILY: Roboto Slab
+    FONT_LANG: en

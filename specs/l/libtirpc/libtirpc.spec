@@ -5,7 +5,7 @@
 
 Name:			libtirpc
 Version:		1.3.7
-Release: 5%{?dist}
+Release:		6%{?dist}
 Summary:		Transport Independent RPC Library
 License:		SISSL AND BSD-3-Clause
 URL:  			http://git.linux-nfs.org/?p=steved/libtirpc.git;a=summary
@@ -119,6 +119,9 @@ mv %{buildroot}%{_mandir}/man3 %{buildroot}%{_mandir}/man3t
 %{_mandir}/*/*
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.3.7-6
+- Render component as lockless
+
 * Sat Sep  5 2026 Steve Dickson <steved@redhat.com> - 1.3.7-3-rc1 
 - Updated to the latest upstream RC release: libtirpc-1-3-8-rc1
 

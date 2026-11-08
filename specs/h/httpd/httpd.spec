@@ -33,7 +33,7 @@
 Summary: Apache HTTP Server
 Name: httpd
 Version: 2.4.69
-Release: 1.2.1%{?dist}
+Release: 2.2.1%{?dist}
 URL: https://httpd.apache.org/
 Source0: https://www.apache.org/dist/httpd/httpd-%{version}.tar.bz2
 Source1: https://www.apache.org/dist/httpd/httpd-%{version}.tar.bz2.asc
@@ -874,6 +874,9 @@ exit $rv
 %{_rpmconfigdir}/macros.d/macros.httpd
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 2.4.69-2.2.1
+- Render component as lockless
+
 * Thu Oct 01 2026 Joe Orton  <jorton@redhat.com> - 2.4.69-1
 - update to 2.4.69
 - add mod_mime_libmagic for F45+

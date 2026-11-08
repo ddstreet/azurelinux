@@ -1,0 +1,56 @@
+From 25fae9378d893ecf13f1054f8efa324fe2c3781a Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Tue, 20 Apr 2021 17:39:50 +1000
+Subject: [PATCH xkeyboard-config] meson.build: add option to install the
+ legacy xorg symlinks
+
+console-setup still relies on the xorg ruleset [1] and there may be other tools
+out there. Let's provide an equivalent option to our autotools build to
+install the xorg symlinks.
+
+Note that unlike the autotools approach, only the "xorg" symlinks are
+provided, not the well and truly legacy "xfree86" ones.
+
+[1] https://salsa.debian.org/installer-team/console-setup/-/merge_requests/7/
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ meson_options.txt | 4 ++++
+ rules/meson.build | 7 +++++++
+ 2 files changed, 11 insertions(+)
+
+diff --git a/meson_options.txt b/meson_options.txt
+index 1bee74b..912d21d 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -6,3 +6,7 @@ option('compat-rules',
+        type: 'boolean',
+        value: true,
+        description: 'create compatibility rules [default=true]')
++option('xorg-rules-symlinks',
++       type: 'boolean',
++       value: true,
++       description: 'create "xorg" symlinks to the "base" rules files [default=false]')
+diff --git a/rules/meson.build b/rules/meson.build
+index c992f2e..7280560 100644
+--- a/rules/meson.build
++++ b/rules/meson.build
+@@ -164,8 +164,15 @@ foreach ruleset: ['base', 'evdev']
+                   output: lst_file,
+                   install: true,
+                   install_dir: dir_xkb_rules)
++
+ endforeach
+ 
++if get_option('xorg-rules-symlinks')
++	foreach suffix: ['', '.lst', '.xml']
++		meson.add_install_script('sh', '-c',
++			'ln -s base@0@ $DESTDIR@1@/xorg@0@'.format(suffix, dir_xkb_rules))
++	endforeach
++endif
+ # Copy the DTD to the build directory, the man page generation expects it in
+ # the same directory as the input XML file.
+ configure_file(output: 'xkb.dtd',
+-- 
+2.31.1
+

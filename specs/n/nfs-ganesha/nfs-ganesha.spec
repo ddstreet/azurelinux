@@ -131,7 +131,7 @@ Requires: openSUSE-release
 
 Name:		nfs-ganesha
 Version:	7.2
-Release:	2%{?dev:%{dev}}%{?dist}
+Release:	3%{?dev:%{dev}}%{?dist}
 Summary:	NFS-Ganesha is a NFS Server running in user space
 License:	LGPL-3.0-or-later
 Url:		https://github.com/nfs-ganesha/nfs-ganesha/wiki
@@ -967,6 +967,9 @@ killall -SIGHUP dbus-daemon >/dev/null 2>&1 || :
 %endif
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 7.2-3
+- Render component as lockless
+
 * Wed Nov 19 2025 Kaleb S. KEITHLEY <kkeithle at redhat.com> - 7.2-2
 - NFS-Ganesha 8.1, rpc-statd unitdir
 

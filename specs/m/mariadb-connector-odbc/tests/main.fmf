@@ -1,0 +1,15 @@
+summary: A simple connection test using MariaDB and unixODBC
+prepare:
+    how: install
+    package:
+    - beakerlib
+    # MariaDB packages in Fedora currently use the versioned package layout.
+    # That means each version only provides versioned names (e.g.: 'mariadb10.11-server', 'mariadb11.8-devel')  
+    # Only one of the versions is 'distribution default', and that version also provides the unversioned names (e.g.: 'mariadb-server', 'mariadb-devel')
+    # This test always only runs against the 'distribution default' version. (the one providing unversioned package names)
+    - mariadb
+    - mariadb-server
+    - mariadb-connector-odbc
+    - unixODBC
+execute:
+    script: cd ./tests/mariadb_connection && ./runtest.sh

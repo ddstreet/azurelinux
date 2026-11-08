@@ -1,0 +1,168 @@
+diff -U0 texlive-base-20210325/source/texk/mendexk/ChangeLog.archfix texlive-base-20210325/source/texk/mendexk/ChangeLog
+--- texlive-base-20210325/source/texk/mendexk/ChangeLog.archfix	2021-05-27 15:01:46.888501972 -0400
++++ texlive-base-20210325/source/texk/mendexk/ChangeLog	2021-05-27 15:02:10.669627643 -0400
+@@ -0,0 +1,13 @@
++2021-05-09  Karl Berry  <karl@freefriends.org>
++
++	* mendex.h (page.attr): use int, not char, since we do signed
++	comparison and aarch64 apparently treats char as unsigned.
++	(index.words): use unsigned char for consistency.
++	* fwrite.c (printpage): factor out beginning/end page values.
++	* tests/rangetwo.idx,
++	* tests/rangetwo.ind,
++	* tests/rangetwo.ist: new simple test.
++	* tests/mendex.test: run the rangetwo test.
++	Report from Johannes Hielscher,
++	https://tug.org/pipermail/tlbuild/2021q1/004873.html.
++
+diff -up texlive-base-20210325/source/texk/mendexk/fwrite.c.archfix texlive-base-20210325/source/texk/mendexk/fwrite.c
+--- texlive-base-20210325/source/texk/mendexk/fwrite.c.archfix	2021-05-27 15:02:37.867771347 -0400
++++ texlive-base-20210325/source/texk/mendexk/fwrite.c	2021-05-27 15:07:00.875160968 -0400
+@@ -326,7 +326,11 @@ static void printpage(struct index *ind,
+ 	for(j=0;j<ind[num].num;j++) {
+ 		cc=range_check(ind[num],j,lbuff);
+ 		if (cc>j) {
+-			if (pnumconv(ind[num].p[j].page,ind[num].p[j].attr[0])==pnumconv(ind[num].p[cc].page,ind[num].p[cc].attr[0])) {
++			int epage = pnumconv(ind[num].p[cc].page,
++	                                     ind[num].p[cc].attr[0]);
++			int bpage = pnumconv(ind[num].p[j].page,
++					     ind[num].p[j].attr[0]);
++			if (epage==bpage) {
+ 				j=cc-1;
+ 				continue;
+ 			}
+@@ -337,20 +341,18 @@ static void printpage(struct index *ind,
+ 			if (strlen(ind[num].p[j].enc)>0) {
+ 				SPRINTF(buff,"%s%s%s",encap_prefix,ind[num].p[j].enc,encap_infix);
+ 			}
+-			if (strlen(suffix_3p)>0 && (pnumconv(ind[num].p[cc].page,ind[num].p[cc].attr[0])-pnumconv(ind[num].p[j].page,ind[num].p[j].attr[0]))==2) {
+-				SAPPENDF(buff,"%s",ind[num].p[j].page);
++			/* print beginning of range */
++			SAPPENDF(buff,"%s",ind[num].p[j].page);
++			if (strlen(suffix_3p)>0 && (epage-bpage)==2) {
+ 				SAPPENDF(buff,"%s",suffix_3p);
+ 			}
+-			else if (strlen(suffix_mp)>0 && (pnumconv(ind[num].p[cc].page,ind[num].p[cc].attr[0])-pnumconv(ind[num].p[j].page,ind[num].p[j].attr[0]))>=2) {
+-				SAPPENDF(buff,"%s",ind[num].p[j].page);
++			else if (strlen(suffix_mp)>0 && (epage-bpage)>=2) {
+ 				SAPPENDF(buff,"%s",suffix_mp);
+ 			}
+-			else if (strlen(suffix_2p)>0 && (pnumconv(ind[num].p[cc].page,ind[num].p[cc].attr[0])-pnumconv(ind[num].p[j].page,ind[num].p[j].attr[0]))==1) {
+-				SAPPENDF(buff,"%s",ind[num].p[j].page);
++			else if (strlen(suffix_2p)>0 && (epage-bpage)==1) {
+ 				SAPPENDF(buff,"%s",suffix_2p);
+ 			}
+ 			else {
+-				SAPPENDF(buff,"%s",ind[num].p[j].page);
+ 				SAPPENDF(buff,"%s",delim_r);
+ 				SAPPENDF(buff,"%s",ind[num].p[cc].page);
+ 			}
+diff -up texlive-base-20210325/source/texk/mendexk/mendex.h.archfix texlive-base-20210325/source/texk/mendexk/mendex.h
+--- texlive-base-20210325/source/texk/mendexk/mendex.h.archfix	2021-05-27 15:07:31.173321042 -0400
++++ texlive-base-20210325/source/texk/mendexk/mendex.h	2021-05-27 15:07:50.429422834 -0400
+@@ -14,12 +14,12 @@
+ struct page {
+ 	char *page;
+ 	char *enc;
+-	char attr[3];
++	int attr[3];
+ };
+ 
+ struct index {
+ 	int num;
+-	char words;
++	unsigned char words;
+ 	char *org[3];
+ 	char *dic[3];
+ 	char *idx[3];
+diff -up texlive-base-20210325/source/texk/mendexk/tests/mendex.test.archfix texlive-base-20210325/source/texk/mendexk/tests/mendex.test
+--- texlive-base-20210325/source/texk/mendexk/tests/mendex.test.archfix	2021-05-27 15:08:12.848541283 -0400
++++ texlive-base-20210325/source/texk/mendexk/tests/mendex.test	2021-05-27 15:13:28.110189451 -0400
+@@ -1,6 +1,6 @@
+ #! /bin/sh -vx
+ # $Id: mendex.test 58575 2021-03-21 08:54:52Z takuji $
+-# Copyright 2017 Karl Berry <tex-live@tug.org>
++# Copyright 2017-2021 Karl Berry <tex-live@tug.org>
+ # Copyright 2013 Peter Breitenlohner <tex-live@tug.org>
+ # You may freely use, modify and/or distribute this file.
+ 
+@@ -24,13 +24,21 @@ cat $srcdir/tests/uni.idx | \
+ 	>uni.ind2 2>uni.ilg2 \
+ 	&& diff $srcdir/tests/uni.ind uni.ind2 || exit 1
+ 
+-# test for page_precedence
+-./mendex -s $srcdir/tests/pprec0.ist $srcdir/tests/pprecA.idx -o pprecA-0.ind1 -t pprecA-0.ilg \
++# test for two-element range suffix_2p
++./mendex -s $srcdir/tests/rangetwo.ist $srcdir/tests/rangetwo.idx \
++	-o rangetwo.ind1 -t rangetwo.ilg \
++	&& diff $srcdir/tests/rangetwo.ind rangetwo.ind1 || exit 1
++
++# test for page_precedence and suffix_3p
++./mendex -s $srcdir/tests/pprec0.ist $srcdir/tests/pprecA.idx \
++	-o pprecA-0.ind1 -t pprecA-0.ilg \
+ 	&& diff $srcdir/tests/pprecA-0.ind pprecA-0.ind1 || exit 1
+ 
+-./mendex -s $srcdir/tests/pprec1.ist $srcdir/tests/pprecA.idx -o pprecA-1.ind1 -t pprecA-1.ilg \
++./mendex -s $srcdir/tests/pprec1.ist $srcdir/tests/pprecA.idx \
++	-o pprecA-1.ind1 -t pprecA-1.ilg \
+ 	&& diff $srcdir/tests/pprecA-1.ind pprecA-1.ind1 || exit 1
+ 
+-./mendex -s $srcdir/tests/pprec2.ist $srcdir/tests/pprecA.idx -o pprecA-2.ind1 -t pprecA-2.ilg \
++./mendex -s $srcdir/tests/pprec2.ist $srcdir/tests/pprecA.idx \
++	-o pprecA-2.ind1 -t pprecA-2.ilg \
+ 	&& diff $srcdir/tests/pprecA-2.ind pprecA-2.ind1 || exit 1
+ 
+diff -up texlive-base-20210325/source/texk/mendexk/tests/rangetwo.idx.archfix texlive-base-20210325/source/texk/mendexk/tests/rangetwo.idx
+--- texlive-base-20210325/source/texk/mendexk/tests/rangetwo.idx.archfix	2021-05-27 15:14:09.048403077 -0400
++++ texlive-base-20210325/source/texk/mendexk/tests/rangetwo.idx	2021-05-27 15:14:03.416373688 -0400
+@@ -0,0 +1,2 @@
++\indexentry{entryA}{1}
++\indexentry{entryA}{2}
+diff -up texlive-base-20210325/source/texk/mendexk/tests/rangetwo.ind.archfix texlive-base-20210325/source/texk/mendexk/tests/rangetwo.ind
+--- texlive-base-20210325/source/texk/mendexk/tests/rangetwo.ind.archfix	2021-05-27 15:14:30.601515549 -0400
++++ texlive-base-20210325/source/texk/mendexk/tests/rangetwo.ind	2021-05-27 15:14:59.970668807 -0400
+@@ -0,0 +1,5 @@
++\begin{theindex}
++
++  \item entryA, 1[[sfx2p]]
++
++\end{theindex}
+diff -up texlive-base-20210325/source/texk/mendexk/tests/rangetwo.ist.archfix texlive-base-20210325/source/texk/mendexk/tests/rangetwo.ist
+--- texlive-base-20210325/source/texk/mendexk/tests/rangetwo.ist.archfix	2021-05-27 15:15:24.712797920 -0400
++++ texlive-base-20210325/source/texk/mendexk/tests/rangetwo.ist	2021-05-27 15:15:51.412937250 -0400
+@@ -0,0 +1,2 @@
++suffix_2p "[[sfx2p]]"
++
+diff -U0 texlive-base-20210325/source/texk/upmendex/ChangeLog.archfix texlive-base-20210325/source/texk/upmendex/ChangeLog
+--- texlive-base-20210325/source/texk/upmendex/ChangeLog.archfix	2021-05-27 14:58:11.836365567 -0400
++++ texlive-base-20210325/source/texk/upmendex/ChangeLog	2021-05-27 14:59:42.613845327 -0400
+@@ -0,0 +1,11 @@
++2021-05-09  Karl Berry  <karl@freefriends.org>
++         * mendex.h (page.attr): use int, not char, since we do signed
++         comparison and aarch64 apparently treats char as unsigned.
++         (index.words): use unsigned char for consistency.
++
++         Same fixes as for mendex; see mendexk/ChangeLog.
++         Report from Johannes Hielscher,
++           https://tug.org/pipermail/tlbuild/2021q1/004873.html
++         and follow-up:
++           https://tug.org/pipermail/tlbuild/2021q2/004911.html
++
+diff -up texlive-base-20210325/source/texk/upmendex/mendex.h.archfix texlive-base-20210325/source/texk/upmendex/mendex.h
+--- texlive-base-20210325/source/texk/upmendex/mendex.h.archfix	2021-05-27 14:59:52.774899013 -0400
++++ texlive-base-20210325/source/texk/upmendex/mendex.h	2021-05-27 15:01:33.381430577 -0400
+@@ -14,12 +14,12 @@
+ struct page {
+ 	char *page;
+ 	char *enc;
+-	char attr[3];
++	int attr[3];
+ };
+ 
+ struct index {
+ 	int num;
+-	char words;
++	unsigned char words;
+ 	UChar *dic[3];
+ 	UChar *org[3];
+ 	UChar *idx[3];

@@ -1,0 +1,42 @@
+summary: blivet gating tests
+
+prepare:
+    how: install
+    package:
+      - python3
+      - python3-dbus
+      - libblockdev-plugins-all
+      - libblockdev-tools
+      - python3-yaml
+      - targetcli
+      - stratis-cli
+      - stratisd
+      - dosfstools
+      - e2fsprogs
+      - xfsprogs
+      - hfsplus-tools
+      - ntfsprogs
+      - exfatprogs
+
+discover:
+    how: shell
+    dist-git-source: true
+    dist-git-install-builddeps: true
+    tests:
+      - name: upstream test suite
+        test: |
+          set -x
+          if [ -z "$PKG_VER" ]; then
+              PKG_VER=`rpmspec -q --srpm --qf "%{version}" python-blivet.spec`
+          fi
+          if [ -z "$PKG_VER" ]; then
+              echo "Error: Unable to extract package version"
+              exit 1
+          fi
+          pushd $TMT_SOURCE_DIR/blivet-${PKG_VER}
+
+          blivet_path=$(find /usr/ -path */site-packages | tr '\n' ':')
+          PYTHONPATH=$blivet_path python3 tests/run_tests.py
+
+execute:
+  - how: tmt

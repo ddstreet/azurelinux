@@ -1,0 +1,6 @@
+require:
+- python3-enchant
+- hunspell-smj
+test: python3 test_dic_availability.py
+framework: shell
+

@@ -1,0 +1,8 @@
+require:
+- hyphen-af
+- hyphen-zu
+- hyphen-devel
+- gcc
+test: bash ./run_tests.sh
+framework: shell
+

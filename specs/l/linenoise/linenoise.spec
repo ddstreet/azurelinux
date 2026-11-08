@@ -7,7 +7,7 @@
 
 Name:           linenoise
 Version:        1.0
-Release:        13.20200312git%{shortcommit}%{?dist}
+Release:        14.20200312git%{shortcommit}%{?dist}
 Summary:        Minimal replacement for readline
 License:        BSD-2-Clause
 URL:            https://github.com/antirez/linenoise
@@ -58,6 +58,9 @@ LIBDIR="%{_libdir}" INCLUDEDIR="%{_includedir}" CFLAGS="%{optflags}" make %{?_sm
 %ldconfig_scriptlets
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.0-14.20200312git97d2850
+- Render component as lockless
+
 * Sun Sep 07 2025 Garry T. Williams <gtwilliams@gmail.com> 1.0-13.20200312git97d2850
 - Fix CVE-2025-9810
 

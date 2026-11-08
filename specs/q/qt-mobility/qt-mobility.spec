@@ -11,7 +11,7 @@
 Name:    qt-mobility
 Summary: Qt Mobility Framework
 Version: 1.2.2
-Release: 0.50.%{snap}git%{git_short}%{?dist}
+Release: 0.51.%{snap}git%{git_short}%{?dist}
 
 License: LGPL-2.1-only WITH Digia-Qt-LGPL-exception-1.1
 URL:     https://code.qt.io/cgit/qt-mobility/qt-mobility.git
@@ -456,6 +456,9 @@ cp -a doc/html/* %{buildroot}%{_qt4_docdir}/html/qtmobility/
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.2.2-0.51.20140317git169da60c
+- Render component as lockless
+
 * Fri Jul 25 2025 Fedora Release Engineering <releng@fedoraproject.org> - 1.2.2-0.50.20140317git169da60c
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 

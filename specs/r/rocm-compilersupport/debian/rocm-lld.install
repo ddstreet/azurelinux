@@ -1,0 +1,6 @@
+/usr/lib/rocm/llvm/bin/ld.lld
+/usr/lib/rocm/llvm/bin/ld64.lld
+/usr/lib/rocm/llvm/bin/lld
+/usr/lib/rocm/llvm/bin/lld-link
+/usr/lib/rocm/llvm/bin/wasm-ld
+

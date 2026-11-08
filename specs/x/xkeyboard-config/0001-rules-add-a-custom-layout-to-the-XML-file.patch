@@ -1,0 +1,50 @@
+From 0c371033f1c18123701860803dd6039ea260ab20 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Wed, 17 Feb 2021 12:42:49 +1000
+Subject: [PATCH xkeyboard-config] rules: add a "custom" layout to the XML file
+
+This layout does not exist and we will never provide it.
+
+However, having it in the XML file means it will show up in GUI
+configuration mechansism that parse the XML file directly (instead of using
+libxbkcommon's libxkbregistry).
+
+Our rulesets fall back to the file "symbols/layout", section "variant"
+for any layout(variant) that's not explicitly covered. This enables users to
+create a symbols/custom file with their layout and have it
+available.
+
+As there are no variants, the GUI tools will only be able to use the default
+section. Commandline tools can use variants as well.
+
+This is papering over the whole issue only, but it does provide for some
+convenience. It will still require adding a file in /usr/share in most cases,
+but since we do not provide this file, it will be safe from being overwritten.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ rules/base.xml | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/rules/base.xml b/rules/base.xml
+index 882278a..e291361 100644
+--- a/rules/base.xml
++++ b/rules/base.xml
+@@ -6321,6 +6321,14 @@
+        </variant>
+       </variantList>
+     </layout>
++    <layout>
++      <configItem>
++	<name>custom</name>
++        <shortDescription>custom</shortDescription>
++        <description>A user-defined custom Layout</description>
++      </configItem>
++      <variantList/>
++    </layout>
+   </layoutList>
+   <optionList>
+     <group allowMultipleSelection="true">
+-- 
+2.29.2
+

@@ -1,0 +1,25 @@
+---
+inspections:
+  # Not a Java package
+  javabytecode: off
+
+  # These just flag when things change "too much"
+  changedfiles: off
+  filesize: off
+  patches: off
+  upstream: off
+
+  # bootloader - can't do anything about executable stack
+  elf: off
+
+  # These are v4-only network functions.  Upstream is dead, and this tool is
+  # legacy, so we can consider it v4-only.
+  badfuncs: off
+  
+  # https://bugzilla.redhat.com/show_bug.cgi?id=2029601
+  annocheck: off
+
+  # So here's the thing: I don't care, especially because it's a symlink to
+  # the same place.  Not only was usrmerge a waste of time, but it's the wrong
+  # direction: stuff in /usr should point to /.
+  pathmigration: off

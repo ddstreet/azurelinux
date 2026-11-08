@@ -4,7 +4,7 @@
 %global	mainver		1.19.4
 #%%global	prever		.rc4
 
-%global	baserelease		1
+%global	baserelease		2
 %global	prerpmver		%(echo "%{?prever}" | sed -e 's|\\.||g')
 
 %global	gem_name	nokogiri
@@ -301,6 +301,9 @@ popd
 %doc	%{gem_dir}/doc/%{gem_name}-%{mainver}%{?prever}/
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.19.4-2
+- Render component as lockless
+
 * Sat Jun 20 2026 Mamoru TASAKA <mtasaka@fedoraproject.org> - 1.19.4-1
 - 1.19.4
 

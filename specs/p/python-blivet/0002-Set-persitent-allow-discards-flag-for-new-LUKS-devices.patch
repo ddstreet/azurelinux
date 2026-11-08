@@ -1,0 +1,36 @@
+From b846a625447dedec850cb22313f1af07a82d1b8c Mon Sep 17 00:00:00 2001
+From: Vojtech Trefny <vtrefny@redhat.com>
+Date: Mon, 10 Mar 2025 09:52:27 +0100
+Subject: [PATCH] Set persitent allow-discards flag for newly created LUKS
+ devices
+
+We are currently using the "allow-discards" in /etc/crypttab to
+set the discards/fstrim feature for LUKS, but that doesn't work
+for Fedora Silverblue so we need to set the persistent flag in the
+LUKS header instead.
+
+Resolves: rhbz#1801539
+---
+ blivet/formats/luks.py | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/blivet/formats/luks.py b/blivet/formats/luks.py
+index ea17bab57..7b8c2397d 100644
+--- a/blivet/formats/luks.py
++++ b/blivet/formats/luks.py
+@@ -426,6 +426,15 @@ def _create(self, **kwargs):
+     def _post_create(self, **kwargs):
+         super(LUKS, self)._post_create(**kwargs)
+ 
++        if self.luks_version == "luks2" and flags.discard_new:
++            try:
++                blockdev.crypto.luks_set_persistent_flags(self.device,
++                                                          blockdev.CryptoLUKSPersistentFlags.ALLOW_DISCARDS)
++            except blockdev.CryptoError as e:
++                raise LUKSError("Failed to set allow discards flag for newly created LUKS format: %s" % str(e))
++            except AttributeError:
++                log.warning("Cannot set allow discards flag: not supported")
++
+         try:
+             info = blockdev.crypto.luks_info(self.device)
+         except blockdev.CryptoError as e:

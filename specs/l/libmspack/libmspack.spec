@@ -3,7 +3,7 @@
 
 Name:           libmspack
 Version:        0.10.1
-Release:        0.15.alpha%{?dist}
+Release:        0.16.alpha%{?dist}
 Summary:        Library for CAB and related files compression and decompression
 
 # CRC32 is LicenseRef-Fedora-UltraPermissive
@@ -84,6 +84,9 @@ popd
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 0.10.1-0.16.alpha
+- Render component as lockless
+
 * Thu Jul 24 2025 Fedora Release Engineering <releng@fedoraproject.org> - 0.10.1-0.15.alpha
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 

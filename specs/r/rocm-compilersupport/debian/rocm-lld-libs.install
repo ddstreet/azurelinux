@@ -1,0 +1,6 @@
+/usr/lib/rocm/llvm/lib/liblldCOFF.so.18git
+/usr/lib/rocm/llvm/lib/liblldCommon.so.18git
+/usr/lib/rocm/llvm/lib/liblldELF.so.18git
+/usr/lib/rocm/llvm/lib/liblldMachO.so.18git
+/usr/lib/rocm/llvm/lib/liblldMinGW.so.18git
+/usr/lib/rocm/llvm/lib/liblldWasm.so.18git

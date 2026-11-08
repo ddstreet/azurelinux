@@ -1,0 +1,7 @@
+framework: beakerlib
+duration: 10m
+require:
+- foma
+- python3
+test: ./runtest.sh
+

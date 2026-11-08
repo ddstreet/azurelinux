@@ -214,7 +214,7 @@
 
 Name:           %{package_name}
 Version:        %{IPA_VERSION}
-Release:        2%{?rc_version:.%rc_version}%{?dist}
+Release:        2%{?rc_version:.%rc_version}%{?dist}.1
 Summary:        The Identity, Policy and Audit system
 
 License:        GPL-3.0-or-later
@@ -1979,6 +1979,9 @@ fi
 %endif
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 4.13.4-2.1
+- Render component as lockless
+
 * Sat Sep 19 2026 Alexander Bokovoy <abokovoy@redhat.com> - 4.13.4-2
 - Update post-4.13.4-release patches
 - Rebuild against Samba 4.25.0-RC2

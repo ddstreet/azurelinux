@@ -1,0 +1,41 @@
+# rpminspect configuration
+
+---
+common:
+    workdir: /var/tmp/rpminspect
+    profiledir: /usr/share/rpminspect/profiles/fedora
+koji:
+    hub: https://koji.fedoraproject.org/kojihub
+    download_ursine: https://kojipkgs.fedoraproject.org
+    download_mbs: https://kojipkgs.fedoraproject.org
+commands:
+    msgunfmt: msgunfmt
+    desktop-file-validate: desktop-file-validate
+    abidiff: abidiff
+    kmidiff: kmidiff
+    annocheck: annocheck
+    udevadm: udevadm
+vendor:
+    vendor_data_dir: /usr/share/rpminspect
+    licensedb:
+        - /usr/share/fedora-license-data/licenses/fedora-licenses.json
+    favor_release: newest
+inspections:
+    abidiff: off
+    disttag: off
+    manpage: off
+    javabytecode: off
+metadata:
+    # Required Vendor string.  This is part of the RPM header and is
+    # the value expected in packages checked by rpminspect.
+    vendor: Fedora Project
+
+    # Allowed build host subdomain.  The RPM header contains information about
+    # where the package was built.  rpminspect verifies the hostnames are in
+    # the expected subdomain listed below.
+    #
+    # This is an array of allowed subdomains.
+    buildhost_subdomain:
+        - .fedoraproject.org
+        - .bos.redhat.com
+

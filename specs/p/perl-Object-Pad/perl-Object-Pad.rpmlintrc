@@ -1,0 +1,3 @@
+addFilter('-tests\.noarch: W: no-documentation')
+# perl-Object-Pad-ExtensionBuilder is a devel package
+addFilter('-ExtensionBuilder\..*: W: devel-file-in-non-devel-package')

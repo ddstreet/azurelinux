@@ -1,0 +1,574 @@
+--- texlive-base-20180414/source/texk/web2c/luatexdir/image/pdftoepdf.w
++++ texlive-base-20180414/source/texk/web2c/luatexdir/image/pdftoepdf.w
+@@ -33,9 +33,9 @@
+ 
+ */
+ 
+-extern void md5(Guchar *msg, int msgLen, Guchar *digest);
++extern void md5(unsigned char *msg, int msgLen, unsigned char *digest);
+ 
+-static GBool isInit = gFalse;
++static bool isInit = false;
+ 
+ /* Maintain AVL tree of all PDF files for embedding */
+ 
+@@ -363,10 +363,10 @@ void copyReal(PDF pdf, double d)
+ 
+ static void copyString(PDF pdf, GooString * string)
+ {
+-    char *p;
++    const char *p;
+     unsigned char c;
+     size_t i, l;
+-    p = string->getCString();
++    p = string->c_str();
+     l = (size_t) string->getLength();
+     if (pdf->cave)
+         pdf_out(pdf, ' ');
+@@ -393,7 +393,7 @@ static void copyString(PDF pdf, GooStrin
+     pdf->cave = true;
+ }
+ 
+-static void copyName(PDF pdf, char *s)
++static void copyName(PDF pdf, const char *s)
+ {
+     pdf_out(pdf, '/');
+     for (; *s != 0; s++) {
+@@ -468,7 +468,7 @@ static void copyObject(PDF pdf, PdfDocum
+         break;
+     /*
+     case objNum:
+-        GBool isNum() { return type == objInt || type == objReal; }
++        bool isNum() { return type == objInt || type == objReal; }
+         break;
+     */
+     case objString:
+@@ -527,7 +527,7 @@ static void writeRefs(PDF pdf, PdfDocume
+ 
+ /* get the pagebox coordinates according to the pagebox_spec */
+ 
+-static PDFRectangle *get_pagebox(Page * page, int pagebox_spec)
++static const PDFRectangle *get_pagebox(Page * page, int pagebox_spec)
+ {
+     switch (pagebox_spec) {
+         case PDF_BOX_SPEC_MEDIA:
+@@ -584,14 +584,14 @@ void read_pdf_info(image_dict * idict)
+     Catalog *catalog;
+     Page *page;
+     int rotate;
+-    PDFRectangle *pagebox;
++    const PDFRectangle *pagebox;
+     int pdf_major_version_found, pdf_minor_version_found;
+     float xsize, ysize, xorig, yorig;
+-    if (isInit == gFalse) {
++    if (isInit == false) {
+         if (!(globalParams))
+             globalParams = new GlobalParams();
+-        globalParams->setErrQuiet(gFalse);
+-        isInit = gTrue;
++        globalParams->setErrQuiet(false);
++        isInit = true;
+     }
+     if (img_type(idict) == IMG_TYPE_PDF)
+         pdf_doc = refPdfDocument(img_filepath(idict), FE_FAIL);
+@@ -721,7 +721,7 @@ void write_epdf(PDF pdf, image_dict * id
+     Ref *pageref;
+     Dict *pageDict;
+     Object obj1, contents, pageobj, pagesobj1, pagesobj2, *op1, *op2, *optmp;
+-    PDFRectangle *pagebox;
++    const PDFRectangle *pagebox;
+     int i, l;
+     double bbox[4];
+     /* char s[256]; */
+@@ -966,7 +966,7 @@ void epdf_free()
+     if (PdfDocumentTree != NULL)
+         avl_destroy(PdfDocumentTree, destroyPdfDocument);
+     PdfDocumentTree = NULL;
+-    if (isInit == gTrue)
++    if (isInit == true)
+         delete globalParams;
+-    isInit = gFalse;
++    isInit = false;
+ }
+--- texlive-base-20180414/source/texk/web2c/luatexdir/lua/lepdflib.cc
++++ texlive-base-20180414/source/texk/web2c/luatexdir/lua/lepdflib.cc
+@@ -240,7 +240,7 @@ static int l_new_Attribute(lua_State * L
+        if (uobj->pd != NULL && uobj->pd->pc != uobj->pc)
+           pdfdoc_changed_error(L);
+        uout = new_Attribute_userdata(L);
+-       uout->d = new Attribute(n, nlen, (Object *)uobj->d);
++       uout->d = new Attribute(GooString(n, nlen), (Object *)uobj->d);
+        uout->atype = ALLOC_LEPDF;
+        uout->pc = uobj->pc;
+        uout->pd = uobj->pd;
+@@ -439,7 +439,7 @@ static int l_new_Object(lua_State * L)
+       break;
+     case 1:
+       if (lua_isboolean (L,1)) {
+-	uout->d = new Object(lua_toboolean(L, 1)? gTrue : gFalse);
++	uout->d = new Object(lua_toboolean(L, 1)? true : false);
+ 	uout->atype = ALLOC_LEPDF;
+ 	uout->pc = 0;
+ 	uout->pd = NULL;
+@@ -596,7 +596,7 @@ static int m_##in##_##function(lua_State
+     uin = (udstruct *) luaL_checkudata(L, 1, M_##in);          \
+     if (uin->pd != NULL && uin->pd->pc != uin->pc)             \
+         pdfdoc_changed_error(L);                               \
+-    o = ((in *) uin->d)->function();                           \
++    o = (out *) ((in *) uin->d)->function();                           \
+     if (o != NULL) {                                           \
+         uout = new_##out##_userdata(L);                        \
+         uout->d = o;                                           \
+@@ -676,7 +676,7 @@ static int m_##in##_##function(lua_State
+         pdfdoc_changed_error(L);                               \
+     gs = (GooString *)((in *) uin->d)->function();             \
+     if (gs != NULL)                                            \
+-        lua_pushlstring(L, gs->getCString(), gs->getLength()); \
++        lua_pushlstring(L, gs->c_str(), gs->getLength()); \
+     else                                                       \
+         lua_pushnil(L);                                        \
+     return 1;                                                  \
+@@ -911,7 +911,7 @@ static int m_Array_getString(lua_State *
+     if (i > 0 && i <= len) {
+         gs = new GooString();
+         if (((Array *) uin->d)->getString(i - 1, gs))
+-            lua_pushlstring(L, gs->getCString(), gs->getLength());
++            lua_pushlstring(L, gs->c_str(), gs->getLength());
+         else
+             lua_pushnil(L);
+         delete gs;
+@@ -1063,7 +1063,7 @@ static int m_Catalog_getJS(lua_State * L
+     if (i > 0 && i <= len) {
+         gs = ((Catalog *) uin->d)->getJS(i - 1);
+         if (gs != NULL)
+-            lua_pushlstring(L, gs->getCString(), gs->getLength());
++            lua_pushlstring(L, gs->c_str(), gs->getLength());
+         else
+             lua_pushnil(L);
+         delete gs;
+@@ -1125,12 +1125,12 @@ m_poppler_get_INT(Dict, getLength);
+ 
+ static int m_Dict_add(lua_State * L)
+ {
+-    char *s;
++    const char *s;
+     udstruct *uin, *uobj;
+     uin = (udstruct *) luaL_checkudata(L, 1, M_Dict);
+     if (uin->pd != NULL && uin->pd->pc != uin->pc)
+         pdfdoc_changed_error(L);
+-    s = copyString(luaL_checkstring(L, 2));
++    s = luaL_checkstring(L, 2);
+     uobj = (udstruct *) luaL_checkudata(L, 3, M_Object);
+     ((Dict *) uin->d)->add(s, std::move(*((Object *) uobj->d)));
+     return 0;
+@@ -1378,7 +1378,7 @@ static int m_GooString__tostring(lua_Sta
+     uin = (udstruct *) luaL_checkudata(L, 1, M_GooString);
+     if (uin->pd != NULL && uin->pd->pc != uin->pc)
+         pdfdoc_changed_error(L);
+-    lua_pushlstring(L, ((GooString *) uin->d)->getCString(),
++    lua_pushlstring(L, ((GooString *) uin->d)->c_str(),
+                     ((GooString *) uin->d)->getLength());
+     return 1;
+ }
+@@ -1527,9 +1527,9 @@ static int m_Object_initBool(lua_State *
+         pdfdoc_changed_error(L);
+     luaL_checktype(L, 2, LUA_TBOOLEAN);
+     if (lua_toboolean(L, 2) != 0)
+-        *((Object *) uin->d) = Object(gTrue);
++        *((Object *) uin->d) = Object(true);
+     else
+-        *((Object *) uin->d) = Object(gFalse);
++        *((Object *) uin->d) = Object(false);
+     return 0;
+ }
+ 
+@@ -1814,7 +1814,7 @@ static int m_Object_getString(lua_State
+         pdfdoc_changed_error(L);
+     if (((Object *) uin->d)->isString()) {
+         gs = (GooString *)((Object *) uin->d)->getString();
+-        lua_pushlstring(L, gs->getCString(), gs->getLength());
++        lua_pushlstring(L, gs->c_str(), gs->getLength());
+     } else
+         lua_pushnil(L);
+     return 1;
+@@ -2051,7 +2051,7 @@ static int m_Object_dictAdd(lua_State *
+         pdfdoc_changed_error(L);
+     if (!((Object *) uin->d)->isDict())
+         luaL_error(L, "Object is not a Dict");
+-    ((Object *) uin->d)->dictAdd(copyString(s), std::move(*((Object *) uobj->d)));
++    ((Object *) uin->d)->dictAdd(s, std::move(*((Object *) uobj->d)));
+     return 0;
+ }
+ 
+@@ -2465,14 +2465,14 @@ m_PDFDoc_INT(getErrorCode);
+ 
+ static int m_PDFDoc_getFileName(lua_State * L)
+ {
+-    GooString *gs;
++    const GooString *gs;
+     udstruct *uin;
+     uin = (udstruct *) luaL_checkudata(L, 1, M_PDFDoc);
+     if (uin->pd != NULL && uin->pd->pc != uin->pc)
+         pdfdoc_changed_error(L);
+     gs = ((PdfDocument *) uin->d)->doc->getFileName();
+     if (gs != NULL)
+-        lua_pushlstring(L, gs->getCString(), gs->getLength());
++        lua_pushlstring(L, gs->c_str(), gs->getLength());
+     else
+         lua_pushnil(L);
+     return 1;
+@@ -2553,7 +2553,7 @@ m_PDFDoc_INT(getNumPages);
+ 
+ static int m_PDFDoc_readMetadata(lua_State * L)
+ {
+-    GooString *gs;
++    const GooString *gs;
+     udstruct *uin;
+     uin = (udstruct *) luaL_checkudata(L, 1, M_PDFDoc);
+     if (uin->pd != NULL && uin->pd->pc != uin->pc)
+@@ -2561,7 +2561,7 @@ static int m_PDFDoc_readMetadata(lua_Sta
+     if (((PdfDocument *) uin->d)->doc->getCatalog()->isOk()) {
+         gs = ((PdfDocument *) uin->d)->doc->readMetadata();
+         if (gs != NULL)
+-            lua_pushlstring(L, gs->getCString(), gs->getLength());
++            lua_pushlstring(L, gs->c_str(), gs->getLength());
+         else
+             lua_pushnil(L);
+     } else
+@@ -2577,7 +2577,7 @@ static int m_PDFDoc_getStructTreeRoot(lu
+     if (uin->pd != NULL && uin->pd->pc != uin->pc)
+         pdfdoc_changed_error(L);
+     if (((PdfDocument *) uin->d)->doc->getCatalog()->isOk()) {
+-        obj = ((PdfDocument *) uin->d)->doc->getStructTreeRoot();
++        obj = (StructTreeRoot *) ((PdfDocument *) uin->d)->doc->getStructTreeRoot();
+         uout = new_StructTreeRoot_userdata(L);
+         uout->d = obj;
+         uout->pc = uin->pc;
+@@ -3024,12 +3024,12 @@ m_poppler_get_GUINT(Attribute,getRevisio
+ 
+ static int m_Attribute_setRevision(lua_State * L)
+ {
+-    Guint i;
++    unsigned int i;
+     udstruct *uin;
+     uin = (udstruct *) luaL_checkudata(L, 1, M_Attribute);
+     if (uin->pd != NULL && uin->pd->pc != uin->pc)
+         pdfdoc_changed_error(L);
+-    i = (Guint) luaL_checkint(L, 2);
++    i = (unsigned int) luaL_checkint(L, 2);
+     ((Attribute *) uin->d)->setRevision(i);
+     return 0;
+ }
+@@ -3038,12 +3038,12 @@ m_poppler_get_BOOL(Attribute, isHidden);
+ 
+ static int m_Attribute_setHidden(lua_State * L)
+ {
+-    GBool i;
++    bool i;
+     udstruct *uin;
+     uin = (udstruct *) luaL_checkudata(L, 1, M_Attribute);
+     if (uin->pd != NULL && uin->pd->pc != uin->pc)
+         pdfdoc_changed_error(L);
+-    i = (GBool) lua_toboolean(L, 2);
++    i = (bool) lua_toboolean(L, 2);
+     ((Attribute *) uin->d)->setHidden(i);
+     return 0;
+ }
+@@ -3180,7 +3180,7 @@ static int m_StructElement_getParentRef(
+ // Ref is false if the C++ functione return false
+ static int m_StructElement_getPageRef(lua_State * L)
+ {
+-    GBool b;
++    bool b;
+     Ref *r;
+     udstruct *uin, *uout;
+     uin = (udstruct *) luaL_checkudata(L, 1, M_StructElement);
+@@ -3214,28 +3214,28 @@ static int m_StructElement_getTypeName(l
+ 
+ static int m_StructElement_setRevision(lua_State * L)
+ {
+-    Guint i;
++    unsigned int i;
+     udstruct *uin;
+     uin = (udstruct *) luaL_checkudata(L, 1, M_StructElement);
+     if (uin->pd != NULL && uin->pd->pc != uin->pc)
+         pdfdoc_changed_error(L);
+-    i = (Guint) luaL_checkint(L, 2);
++    i = (unsigned int) luaL_checkint(L, 2);
+     ((StructElement *) uin->d)->setRevision(i);
+     return 0;
+ }
+ 
+ static int m_StructElement_getText(lua_State * L)
+ {
+-    GBool i;
++    bool i;
+     GooString *gs;
+     udstruct *uin;
+     uin = (udstruct *) luaL_checkudata(L, 1, M_StructElement);
+     if (uin->pd != NULL && uin->pd->pc != uin->pc)
+         pdfdoc_changed_error(L);
+-    i = (GBool) lua_toboolean(L, 2);
++    i = (bool) lua_toboolean(L, 2);
+     gs =  ((StructElement *) uin->d)->getText(i);
+     if (gs != NULL)
+-        lua_pushlstring(L, gs->getCString(), gs->getLength());
++        lua_pushlstring(L, gs->c_str(), gs->getLength());
+     else
+         lua_pushnil(L);
+     return 1;
+@@ -3321,7 +3321,7 @@ static int m_StructElement_findAttribute
+ {
+     Attribute::Type t;
+     Attribute::Owner o;
+-    GBool g;
++    bool g;
+     udstruct *uin, *uout;
+     const Attribute *a;
+     uin = (udstruct *) luaL_checkudata(L, 1, M_StructElement);
+@@ -3329,7 +3329,7 @@ static int m_StructElement_findAttribute
+         pdfdoc_changed_error(L);
+     t = (Attribute::Type) luaL_checkint(L,1);
+     o = (Attribute::Owner) luaL_checkint(L,2);
+-    g = (GBool) lua_toboolean(L, 3);
++    g = (bool) lua_toboolean(L, 3);
+     a = ((StructElement *) uin->d)->findAttribute(t,g,o);
+ 
+     if (a!=NULL){
+--- texlive-base-20180414/source/texk/web2c/pdftexdir/pdftoepdf.cc
++++ texlive-base-20180414/source/texk/web2c/pdftexdir/pdftoepdf.cc
+@@ -120,7 +120,7 @@ struct UsedEncoding {
+ 
+ static InObj *inObjList;
+ static UsedEncoding *encodingList;
+-static GBool isInit = gFalse;
++static bool isInit = false;
+ 
+ // --------------------------------------------------------------------
+ // Maintain list of open embedded PDF files
+@@ -275,7 +275,7 @@ static int getNewObjectNumber(Ref ref)
+ 
+ static void copyObject(Object *);
+ 
+-static void copyName(char *s)
++static void copyName(const char *s)
+ {
+     pdf_puts("/");
+     for (; *s != 0; s++) {
+@@ -310,7 +310,7 @@ static void copyDict(Object * obj)
+ static void copyFontDict(Object * obj, InObj * r)
+ {
+     int i, l;
+-    char *key;
++    const char *key;
+     if (!obj->isDict())
+         pdftex_fail("PDF inclusion: invalid dict type <%s>",
+                     obj->getTypeName());
+@@ -382,7 +382,7 @@ static bool embeddableFont(Object * font
+     return false;
+ }
+ 
+-static void copyFont(char *tag, Object * fontRef)
++static void copyFont(const char *tag, Object * fontRef)
+ {
+     Object fontdict, subtype, basefont, fontdescRef, fontdesc, charset,
+         stemV;
+@@ -427,7 +427,7 @@ static void copyFont(char *tag, Object *
+         charset = fontdesc.dictLookup("CharSet");
+         if (!charset.isNull() &&
+             charset.isString() && is_subsetable(fontmap))
+-            epdf_mark_glyphs(fd, (char *)charset.getString()->getCString());
++            epdf_mark_glyphs(fd, (char *)charset.getString()->c_str());
+         else
+             embed_whole_font(fd);
+         addFontDesc(fontdescRef.getRef(), fd);
+@@ -467,7 +467,7 @@ static void copyFontResources(Object * o
+     pdf_puts(">>\n");
+ }
+ 
+-static void copyOtherResources(Object * obj, char *key)
++static void copyOtherResources(Object * obj, const char *key)
+ {
+     // copies all other resources (write_epdf handles Fonts and ProcSets),
+ 
+@@ -554,8 +554,8 @@ static void copyObject(Object * obj)
+     Object obj1;
+     int i, l, c;
+     Ref ref;
+-    char *p;
+-    GString *s;
++    const char *p;
++    const GString *s;
+     if (obj->isBool()) {
+         pdf_printf("%s", obj->getBool()? "true" : "false");
+     } else if (obj->isInt()) {
+@@ -565,8 +565,8 @@ static void copyObject(Object * obj)
+     } else if (obj->isNum()) {
+         pdf_printf("%s", convertNumToPDF(obj->getNum()));
+     } else if (obj->isString()) {
+-        s = (GooString *)obj->getString();
+-        p = s->getCString();
++        s = (const GooString *)obj->getString();
++        p = s->c_str();
+         l = s->getLength();
+         if (strlen(p) == (unsigned int) l) {
+             pdf_puts("(");
+@@ -664,7 +664,7 @@ static void writeEncodings()
+                     ("PDF inclusion: CID fonts are not supported"
+                      " (try to disable font replacement to fix this)");
+             }
+-            if ((s = ((Gfx8BitFont *) r->font)->getCharName(i)) != 0)
++            if ((s = (char *) ((Gfx8BitFont *) r->font)->getCharName(i)) != 0)
+                 glyphNames[i] = s;
+             else
+                 glyphNames[i] = notdef;
+@@ -683,7 +683,7 @@ static void writeEncodings()
+ }
+ 
+ // get the pagebox according to the pagebox_spec
+-static PDFRectangle *get_pagebox(Page * page, int pagebox_spec)
++static const PDFRectangle *get_pagebox(Page * page, int pagebox_spec)
+ {
+     if (pagebox_spec == pdfboxspecmedia)
+         return page->getMediaBox();
+@@ -715,7 +715,7 @@ read_pdf_info(char *image_name, char *pa
+ {
+     PdfDocument *pdf_doc;
+     Page *page;
+-    PDFRectangle *pagebox;
++    const PDFRectangle *pagebox;
+ #ifdef POPPLER_VERSION
+     int pdf_major_version_found, pdf_minor_version_found;
+ #else
+@@ -724,8 +724,8 @@ read_pdf_info(char *image_name, char *pa
+     // initialize
+     if (!isInit) {
+         globalParams = new GlobalParams();
+-        globalParams->setErrQuiet(gFalse);
+-        isInit = gTrue;
++        globalParams->setErrQuiet(false);
++        isInit = true;
+     }
+     // open PDF file
+     pdf_doc = find_add_document(image_name);
+@@ -822,7 +822,7 @@ void write_epdf(void)
+     Object groupDict;
+     bool writeSepGroup = false;
+     Object info;
+-    char *key;
++    const char *key;
+     char s[256];
+     int i, l;
+     int rotate;
+@@ -849,7 +849,7 @@ void write_epdf(void)
+     pageObj = xref->fetch(pageRef->num, pageRef->gen);
+     pageDict = pageObj.getDict();
+     rotate = page->getRotate();
+-    PDFRectangle *pagebox;
++    const PDFRectangle *pagebox;
+     // write the Page header
+     pdf_puts("/Type /XObject\n");
+     pdf_puts("/Subtype /Form\n");
+@@ -977,7 +977,7 @@ The changes below seem to work fine.
+             }
+             l = dic1.getLength();
+             for (i = 0; i < l; i++) {
+-                groupDict.dictAdd(copyString(dic1.getKey(i)),
++                groupDict.dictAdd(dic1.getKey(i),
+                                   dic1.getValNF(i));
+             }
+ // end modification
+--- texlive-base-20180414/source/texk/web2c/pdftexdir/pdftosrc.cc
++++ texlive-base-20180414/source/texk/web2c/pdftexdir/pdftosrc.cc
+@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
+             fprintf(stderr, "No SourceName found\n");
+             exit(1);
+         }
+-        outname = (char *)srcName.getString()->getCString();
++        outname = (char *)srcName.getString()->c_str();
+         // We cannot free srcName, as objname shares its string.
+         // srcName.free();
+     } else if (objnum > 0) {
+@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
+             fprintf(stderr, "Not a Stream object\n");
+             exit(1);
+         }
+-        sprintf(buf, "%s", fileName->getCString());
++        sprintf(buf, "%s", fileName->c_str());
+         if ((p = strrchr(buf, '.')) == 0)
+             p = strchr(buf, 0);
+         if (objgen == 0)
+@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
+         outname = buf;
+     } else {                    // objnum < 0 means we are extracting the XRef table
+         extract_xref_table = true;
+-        sprintf(buf, "%s", fileName->getCString());
++        sprintf(buf, "%s", fileName->c_str());
+         if ((p = strrchr(buf, '.')) == 0)
+             p = strchr(buf, 0);
+         sprintf(p, ".xref");
+@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
+                 Object objStr, obj1, obj2;
+                 int nObjects, first, n;
+                 int localOffset = 0;
+-                Guint firstOffset;
++                unsigned int firstOffset;
+ 
+                 objStr = xref->fetch(e->offset, 0);
+                 assert(objStr.isStream());
+@@ -173,9 +173,9 @@ int main(int argc, char *argv[])
+ 
+                 // parse the header: object numbers and offsets
+                 objStr.streamReset();
+-                str = new EmbedStream(objStr.getStream(), Object(objNull), gTrue, first);
++                str = new EmbedStream(objStr.getStream(), Object(objNull), true, first);
+                 lexer = new Lexer(xref, str);
+-                parser = new Parser(xref, lexer, gFalse);
++                parser = new Parser(xref, lexer, false);
+                 for (n = 0; n < nObjects; ++n) {
+                     obj1 = parser->getObj();
+                     obj2 = parser->getObj();
+--- texlive-base-20180414/source/texk/web2c/xetexdir/pdfimage.cpp
++++ texlive-base-20180414/source/texk/web2c/xetexdir/pdfimage.cpp
+@@ -79,25 +79,28 @@ pdf_get_rect(char* filename, int page_nu
+ 	Page*		page = doc->getCatalog()->getPage(page_num);
+ 
+ 	PDFRectangle*	r;
++	const PDFRectangle*	cr;
+ 	switch (pdf_box) {
+ 		default:
+ 		case pdfbox_crop:
+-			r = page->getCropBox();
++			cr = page->getCropBox();
+ 			break;
+ 		case pdfbox_media:
+-			r = page->getMediaBox();
++			cr = page->getMediaBox();
+ 			break;
+ 		case pdfbox_bleed:
+-			r = page->getBleedBox();
++			cr = page->getBleedBox();
+ 			break;
+ 		case pdfbox_trim:
+-			r = page->getTrimBox();
++			cr = page->getTrimBox();
+ 			break;
+ 		case pdfbox_art:
+-			r = page->getArtBox();
++			cr = page->getArtBox();
+ 			break;
+ 	}
+ 
++	r = new PDFRectangle (cr->x1, cr->y1, cr->x2, cr->y2);
++
+ 	int RotAngle = 0;
+ 	RotAngle = (int)page->getRotate() % 360;
+ 	if (RotAngle < 0)
+@@ -125,6 +128,7 @@ pdf_get_rect(char* filename, int page_nu
+ 	box->wd = 72.27 / 72 * fabs(r->x2 - r->x1);
+ 	box->ht = 72.27 / 72 * fabs(r->y2 - r->y1);
+ 
++	delete r;
+ 	delete doc;
+ 
+ 	return 0;

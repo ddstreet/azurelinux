@@ -1,0 +1,17 @@
+summary: Fonts related tests
+discover:
+    how: fmf
+    url: https://src.fedoraproject.org/tests/fonts
+prepare:
+    name: tmt
+    how: install
+    package: paktype-naskh-basic-fonts
+execute:
+    how: tmt
+environment:
+    PACKAGE: paktype-naskh-basic-fonts
+    FONT_ALIAS: sans-serif
+    FONT_FAMILY: PakType Naskh Basic
+    FONT_LANG: ur,pa-pk
+    DEFAULT_SANS: 1
+    FONT_VALIDATE_EXCLUDE_FILES: (SemiWide|Wide)

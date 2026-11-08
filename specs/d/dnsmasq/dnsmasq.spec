@@ -28,7 +28,7 @@
 
 Name:           dnsmasq
 Version:        2.92rel2
-Release:        2%{?extraversion:.%{extraversion}}%{?dist}
+Release:        3%{?extraversion:.%{extraversion}}%{?dist}
 Summary:        A lightweight DHCP/caching DNS server
 
 # SPDX identifiers already
@@ -239,6 +239,9 @@ fi
 %endif
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 2.92rel2-3
+- Render component as lockless
+
 * Tue May 12 2026 Petr Menšík <pemensik@redhat.com> - 2.92rel2-9
 - Update to 2.92rel2 (rhbz#2469245)
 

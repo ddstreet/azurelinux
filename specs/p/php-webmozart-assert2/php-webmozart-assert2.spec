@@ -35,7 +35,7 @@ Name:          php-%{composer_vendor}-%{composer_project}%{major}
 Summary:       Assertions to validate method input/output with nice error messages
 License:       MIT
 Version:       2.4.1
-Release:       1%{?dist}
+Release:       2%{?dist}
 URL:           https://github.com/%{gh_owner}/%{gh_project}
 
 # GitHub export does not include tests.
@@ -135,6 +135,9 @@ exit $RETURN_CODE
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 2.4.1-2
+- Render component as lockless
+
 * Tue Jun 16 2026 Remi Collet <remi@remirepo.net> - 2.4.1-1
 - update to 2.4.1
 

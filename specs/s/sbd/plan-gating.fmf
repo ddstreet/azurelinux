@@ -1,0 +1,22 @@
+summary: Run cts regression tests
+discover:
+  how: shell
+  tests:
+    - name: tier0
+      test: /usr/share/sbd/regressions.sh
+      duration: 30m
+      tier: 0
+provision:
+  how: virtual
+prepare:
+  - name: Disable installing everything from srpm
+    how: install
+    exclude: ".*"
+  - name: Install the main package
+    how: install
+    package:
+      - sbd
+      - sbd-tests
+      - device-mapper
+execute:
+  how: tmt

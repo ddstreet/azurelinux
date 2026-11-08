@@ -1,0 +1,8 @@
+[Match]
+Name=lldpad
+
+[Network]
+DHCP=no
+IPv6AcceptRA=false
+LLDP=yes
+EmitLLDP=yes

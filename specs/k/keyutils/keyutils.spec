@@ -8,7 +8,7 @@
 
 Name:    keyutils
 Version: 1.6.3
-Release: 6%{?buildid}%{?dist}
+Release: 7%{?buildid}%{?dist}
 Summary: Linux Key Management Utilities
 License: GPL-2.0-or-later AND LGPL-2.1-or-later
 Url:   https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git
@@ -100,6 +100,9 @@ make \
 %{_mandir}/man3/*
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.6.3-7
+- Render component as lockless
+
 * Thu Jul 24 2025 Fedora Release Engineering <releng@fedoraproject.org> - 1.6.3-6
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 

@@ -27,7 +27,7 @@
 
 %global rpmver 6.0.2
 #global snapver rc1
-%global baserelease 1
+%global baserelease 2
 %global sover 10
 
 %global srcver %{rpmver}%{?snapver:-%{snapver}}
@@ -627,6 +627,9 @@ fi
 %doc %{_defaultdocdir}/rpm/API/
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 6.0.2-2
+- Render component as lockless
+
 * Thu Jul 16 2026 Michal Domonkos <mdomonko@redhat.com> - 6.0.2-1
 - Rebase to 6.0.2 (https://rpm.org/releases/6.0.2)
 

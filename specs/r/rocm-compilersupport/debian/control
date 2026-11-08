@@ -1,0 +1,17 @@
+Source: llvm-project-rocm
+Maintainer: Tom Rix <Tom.Rix@amd.com>
+Uploaders: Tom Rix <Tom.Rix@amd.com>,
+Section: devel
+Priority: optional
+Build-Depends: debhelper-compat (= 13),
+     binutils-dev,
+     build-essential,
+     cmake,
+     debhelper
+
+Package: rocm-llvm
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Pre-Depends: ${misc:Pre-Depends}
+Description: ROCm llvm
+

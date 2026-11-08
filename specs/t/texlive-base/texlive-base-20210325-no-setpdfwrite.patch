@@ -1,0 +1,10 @@
+diff -up texlive-base-20210325/source/utils/asymptote/patches/dvipdf.no-setpdfwrite texlive-base-20210325/source/utils/asymptote/patches/dvipdf
+--- texlive-base-20210325/source/utils/asymptote/patches/dvipdf.no-setpdfwrite	2021-06-21 10:05:10.392585479 -0400
++++ texlive-base-20210325/source/utils/asymptote/patches/dvipdf	2021-06-21 10:05:30.969698895 -0400
+@@ -50,5 +50,5 @@ fi
+ 
+ # We have to include the options twice because -I only takes effect if it
+ # appears before other options.
+-exec dvips $DVIPSOPTIONS -q -f "$infile" | $GS_EXECUTABLE $OPTIONS -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sstdout=%stderr -sOutputFile="$outfile" $OPTIONS -c .setpdfwrite -
++exec dvips $DVIPSOPTIONS -q -f "$infile" | $GS_EXECUTABLE $OPTIONS -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sstdout=%stderr -sOutputFile="$outfile" $OPTIONS -c 3000000 setvmthreshold -
+ 

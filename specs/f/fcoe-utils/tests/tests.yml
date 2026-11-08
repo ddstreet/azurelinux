@@ -1,0 +1,15 @@
+---
+# No tests suitable for container environment
+# No tests suitable for atomic environment
+#
+# Tests suitable for classic environment
+- hosts: localhost
+  roles:
+  - role: standard-test-beakerlib
+    tags:
+    - classic
+    tests:
+     - sanity
+    required_packages:
+     - fcoe-utils
+     - libselinux-python

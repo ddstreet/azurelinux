@@ -2,7 +2,7 @@
 # Do not edit manually; changes may be overwritten.
 
 %global date    20020801
-%global baserelease 23
+%global baserelease 24
 
 Name:           xhtml1-dtds
 Version:        1.0
@@ -117,6 +117,9 @@ cd - >/dev/null
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.0-20020801.24
+- Render component as lockless
+
 * Fri Jul 25 2025 Fedora Release Engineering <releng@fedoraproject.org> - 1.0-20020801.23
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 

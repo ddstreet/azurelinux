@@ -12,7 +12,7 @@
 Summary: Ncurses support utilities
 Name: ncurses
 Version: 6.5
-Release: 7.%{revision}%{?dist}
+Release: 8.%{revision}%{?dist}
 License: MIT-open-group
 URL: https://invisible-island.net/ncurses/ncurses.html
 Source0: https://invisible-mirror.net/archives/ncurses/current/ncurses-%{version}-%{revision}.tgz
@@ -304,6 +304,9 @@ xz NEWS
 %{_libdir}/lib*.a
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 6.5-8.20250614
+- Render component as lockless
+
 * Thu Jul 24 2025 Fedora Release Engineering <releng@fedoraproject.org> - 6.5-7.20250614
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 
