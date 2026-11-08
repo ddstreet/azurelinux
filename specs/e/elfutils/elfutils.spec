@@ -7,7 +7,7 @@
 
 Name: elfutils
 Version: 0.196
-%global baserelease 3
+%global baserelease 4
 Release: %{baserelease}%{?dist}
 URL: http://elfutils.org/
 %global source_url ftp://sourceware.org/pub/elfutils/%{version}/
@@ -531,6 +531,9 @@ exit 0
 %systemd_postun_with_restart debuginfod.service
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 0.196-4
+- re-render component after removing release number workaround
+
 * Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 0.196-3
 - Render component as lockless
 

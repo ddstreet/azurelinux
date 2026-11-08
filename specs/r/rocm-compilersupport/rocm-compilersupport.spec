@@ -44,7 +44,7 @@
 
 Name:           rocm-compilersupport
 Version:        %{llvm_maj_ver}
-Release:        22.rocm%{rocm_version}%{?dist}
+Release:        23.rocm%{rocm_version}%{?dist}
 Summary:        Various AMD ROCm LLVM related services
 %if 0%{?suse_version}
 Group:          Development/Languages/Other
@@ -1051,6 +1051,9 @@ echo "--gcc-triple=%{_target_cpu}-%{_vendor}-linux" > %{buildroot}%{bundle_prefi
 %{bundle_prefix}/lib/libc++experimental.a
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 19-23.rocm6.4.2
+- re-render component after removing release number workaround
+
 * Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 19-22.rocm6.4.2
 - Render component as lockless
 

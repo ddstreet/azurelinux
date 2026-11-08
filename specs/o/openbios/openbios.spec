@@ -13,7 +13,7 @@
 
 Name:           openbios
 Version:        %{date}
-Release:        3.git%{hash}%{?dist}
+Release:        4.git%{hash}%{?dist}
 Epoch:          1
 Summary:        OpenBIOS implementation of IEEE 1275-1994
 
@@ -101,6 +101,9 @@ cp -a obj-sparc64/openbios-builtin.elf $qemudir/openbios-sparc64
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1:20240913-4.gitc3a19c1
+- re-render component after removing release number workaround
+
 * Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1:20240913-3.gitc3a19c1
 - Render component as lockless
 

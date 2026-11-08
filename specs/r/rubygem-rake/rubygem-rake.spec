@@ -9,7 +9,7 @@
 
 %global	gem_name	rake
 
-%global	baserelease	103
+%global	baserelease	104
 
 Summary:	Rake is a Make-like program implemented in Ruby
 Name:		rubygem-%{gem_name}
@@ -123,6 +123,9 @@ popd
 %doc %{gem_instdir}/*.rdoc
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 13.3.0-104
+- re-render component after removing release number workaround
+
 * Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 13.3.0-103
 - Render component as lockless
 

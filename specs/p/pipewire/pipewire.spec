@@ -15,7 +15,7 @@
 %global ms_version   0.4.2
 
 # For rpmdev-bumpspec and releng automation
-%global baserelease 9
+%global baserelease 10
 
 #global snapdate   20210107
 #global gitcommit  b17db2cebc1a5ab2c01851d29c05f79cd2f262bb
@@ -908,6 +908,9 @@ systemctl --no-reload preset --global pipewire.socket >/dev/null 2>&1 || :
 %{_datadir}/pipewire/pipewire.conf.d/50-raop.conf
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.4.11-10
+- re-render component after removing release number workaround
+
 * Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 1.4.11-9
 - Render component as lockless
 

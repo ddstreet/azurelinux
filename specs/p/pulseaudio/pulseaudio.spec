@@ -37,7 +37,7 @@
 Name:           pulseaudio
 Summary:        Improved Linux Sound Server
 Version:        %{pa_major}%{?pa_minor:.%{pa_minor}}
-Release:        15%{?snap:.%{snap}git%{shortcommit}}%{?dist}
+Release:        16%{?snap:.%{snap}git%{shortcommit}}%{?dist}
 License:        LGPL-2.1-or-later
 URL:            http://www.freedesktop.org/wiki/Software/PulseAudio
 %if 0%{?gitrel}
@@ -682,6 +682,9 @@ systemctl --no-reload preset --global pulseaudio.socket >/dev/null 2>&1 || :
 
 
 %changelog
+* Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 17.0-16
+- re-render component after removing release number workaround
+
 * Sun Nov 08 2026 Dan Streetman <ddstreet@ieee.org> - 17.0-15
 - Render component as lockless
 
